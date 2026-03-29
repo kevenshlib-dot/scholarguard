@@ -173,14 +173,38 @@ export async function submitDetection(
 
 /**
  * Get the current status / result for a detection task.
+ * The API nests scores inside data.result; we flatten them to the top level.
  */
 export async function getDetectionResult(
   taskId: string
 ): Promise<DetectResultData> {
-  const { data } = await client.get<APIResponse<DetectResultData>>(
+  const { data } = await client.get<APIResponse<{
+    task_id: string;
+    status: string;
+    result?: {
+      detection_id?: string;
+      risk_score?: number;
+      risk_level?: string;
+      llm_confidence?: number;
+      statistical_score?: number;
+      formula_version?: string;
+      param_version?: string;
+      language?: string;
+      [key: string]: unknown;
+    };
+  }>>(
     `/detect/${taskId}`
   );
-  return data.data;
+  const raw = data.data;
+  // Flatten: merge nested result fields to top level
+  return {
+    task_id: raw.task_id,
+    status: raw.status as DetectResultData["status"],
+    risk_score: raw.result?.risk_score,
+    risk_level: raw.result?.risk_level,
+    llm_confidence: raw.result?.llm_confidence,
+    statistical_score: raw.result?.statistical_score,
+  };
 }
 
 /**
