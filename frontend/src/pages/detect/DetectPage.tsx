@@ -1,11 +1,17 @@
 import { useState, useRef, useCallback } from "react";
-import { detectText, getDetectionResult, submitFeedback } from "../../services/api";
-import type { DetectResult } from "../../services/api";
+import {
+  submitDetection,
+  pollDetectionResult,
+  submitFeedback,
+} from "../../services/api";
+import type { DetectResultData } from "../../services/api";
 import RiskBadge from "../../components/RiskBadge";
 import HeatmapBar from "../../components/HeatmapBar";
 
 type Granularity = "document" | "paragraph" | "sentence";
 type Language = "auto" | "zh" | "en";
+
+const MIN_TEXT_LENGTH = 200;
 
 const disciplines = [
   { value: "general", label: "通用" },
@@ -26,59 +32,66 @@ export default function DetectPage() {
   /* ---- Detection State ---- */
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState("");
-  const [result, setResult] = useState<DetectResult | null>(null);
+  const [taskStatus, setTaskStatus] = useState<string>("");
+  const [result, setResult] = useState<DetectResultData | null>(null);
   const [error, setError] = useState("");
 
   /* ---- Feedback State ---- */
   const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const [feedbackType, setFeedbackType] = useState<"agree" | "disagree" | "partial">("agree");
+  const [feedbackType, setFeedbackType] = useState<
+    "agree" | "disagree" | "partial"
+  >("agree");
   const [feedbackComment, setFeedbackComment] = useState("");
   const [feedbackSent, setFeedbackSent] = useState(false);
 
+  const textTooShort = text.length > 0 && text.length < MIN_TEXT_LENGTH;
+
   /* ---- File upload handler ---- */
-  const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setText((ev.target?.result as string) ?? "");
-    };
-    reader.readAsText(file);
-  }, []);
+  const handleFile = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setText((ev.target?.result as string) ?? "");
+      };
+      reader.readAsText(file);
+    },
+    []
+  );
 
   /* ---- Detect ---- */
   const handleDetect = async () => {
-    if (!text.trim()) return;
+    if (!text.trim() || text.length < MIN_TEXT_LENGTH) return;
     setLoading(true);
     setResult(null);
     setError("");
     setFeedbackSent(false);
     setFeedbackOpen(false);
     setProgress("正在提交检测任务...");
+    setTaskStatus("submitting");
 
     try {
-      const task = await detectText(text, granularity, language, discipline);
-      setProgress("任务已提交，正在分析文本...");
+      const task = await submitDetection(text, granularity, language, discipline);
+      setTaskStatus("pending");
+      setProgress("任务已提交，排队等待中...");
 
-      // Poll for result
-      let attempts = 0;
-      const maxAttempts = 60;
-      const poll = async (): Promise<DetectResult> => {
-        const res = await getDetectionResult(task.task_id);
-        if (res.status === "completed" || res.status === "failed") return res;
-        if (attempts++ >= maxAttempts) {
-          return { ...res, status: "failed", error: "检测超时，请稍后重试" };
-        }
-        setProgress(
-          res.status === "processing"
-            ? "AI模型分析中，请稍候..."
-            : "排队等待中..."
-        );
-        await new Promise((r) => setTimeout(r, 2000));
-        return poll();
-      };
+      const final = await pollDetectionResult(
+        task.task_id,
+        (status) => {
+          setTaskStatus(status);
+          setProgress(
+            status === "processing"
+              ? "AI模型分析中，请稍候..."
+              : "排队等待中..."
+          );
+        },
+        5000,
+        60
+      );
 
-      const final = await poll();
+      setTaskStatus(final.status);
+
       if (final.status === "failed") {
         setError(final.error || "检测失败，请重试");
       } else {
@@ -90,6 +103,7 @@ export default function DetectPage() {
     } finally {
       setLoading(false);
       setProgress("");
+      setTaskStatus("");
     }
   };
 
@@ -124,13 +138,18 @@ export default function DetectPage() {
           </label>
           <textarea
             className="input min-h-[200px] resize-y"
-            placeholder="在此粘贴需要检测的学术文本，或上传文件..."
+            placeholder="在此粘贴需要检测的学术文本，或上传文件...（至少200字符）"
             value={text}
             onChange={(e) => setText(e.target.value)}
           />
           <div className="flex items-center justify-between mt-2">
-            <span className="text-xs text-gray-400">
-              {text.length} 字符
+            <span
+              className={`text-xs ${
+                textTooShort ? "text-red-500 font-medium" : "text-gray-400"
+              }`}
+            >
+              {text.length} / {MIN_TEXT_LENGTH} 字符
+              {textTooShort && `（还需 ${MIN_TEXT_LENGTH - text.length} 字符）`}
             </span>
             <button
               type="button"
@@ -206,7 +225,7 @@ export default function DetectPage() {
         <div className="flex items-center gap-3 pt-2">
           <button
             className="btn-primary"
-            disabled={loading || !text.trim()}
+            disabled={loading || !text.trim() || text.length < MIN_TEXT_LENGTH}
             onClick={handleDetect}
           >
             {loading ? (
@@ -242,6 +261,45 @@ export default function DetectPage() {
         </div>
       </div>
 
+      {/* Status indicator while polling */}
+      {loading && taskStatus && (
+        <div className="card flex items-center gap-4 py-4">
+          <div className="relative h-10 w-10">
+            <svg
+              className="animate-spin h-10 w-10 text-brand-500"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+                fill="none"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+              />
+            </svg>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-900">
+              {taskStatus === "pending" && "排队等待中..."}
+              {taskStatus === "processing" && "AI模型分析中..."}
+              {taskStatus === "submitting" && "正在提交..."}
+            </p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {taskStatus === "pending" && "任务已进入队列，等待处理"}
+              {taskStatus === "processing" && "正在运行检测模型，请耐心等待"}
+              {taskStatus === "submitting" && "正在连接服务器"}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Error */}
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
@@ -255,7 +313,7 @@ export default function DetectPage() {
           <h3 className="text-lg font-semibold text-gray-900">检测结果</h3>
 
           {/* Top-level metrics */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-gray-50 rounded-lg p-4 text-center">
               <p className="text-xs text-gray-500 mb-2">风险等级</p>
               <RiskBadge level={result.risk_level ?? "low"} size="lg" />
@@ -270,15 +328,44 @@ export default function DetectPage() {
               </p>
             </div>
             <div className="bg-gray-50 rounded-lg p-4 text-center">
-              <p className="text-xs text-gray-500 mb-2">证据完备度</p>
+              <p className="text-xs text-gray-500 mb-2">LLM 置信度</p>
               <p className="text-2xl font-bold text-gray-900">
-                {result.evidence_completeness !== undefined
-                  ? (result.evidence_completeness * 100).toFixed(0)
+                {result.llm_confidence !== undefined
+                  ? (result.llm_confidence * 100).toFixed(1)
+                  : "N/A"}
+                <span className="text-sm font-normal text-gray-400">%</span>
+              </p>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-4 text-center">
+              <p className="text-xs text-gray-500 mb-2">统计特征分数</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {result.statistical_score !== undefined
+                  ? (result.statistical_score * 100).toFixed(1)
                   : "N/A"}
                 <span className="text-sm font-normal text-gray-400">%</span>
               </p>
             </div>
           </div>
+
+          {/* Evidence completeness */}
+          {result.evidence_completeness !== undefined && (
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-gray-500">证据完备度</p>
+                <p className="text-sm font-semibold text-gray-700">
+                  {(result.evidence_completeness * 100).toFixed(0)}%
+                </p>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-brand-500 h-2 rounded-full transition-all"
+                  style={{
+                    width: `${(result.evidence_completeness * 100).toFixed(0)}%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Heatmap */}
           {result.paragraph_scores && result.paragraph_scores.length > 0 && (
@@ -355,7 +442,10 @@ export default function DetectPage() {
                     ["disagree", "不认同"],
                   ] as const
                 ).map(([val, label]) => (
-                  <label key={val} className="flex items-center gap-1.5 text-sm">
+                  <label
+                    key={val}
+                    className="flex items-center gap-1.5 text-sm"
+                  >
                     <input
                       type="radio"
                       name="feedback"

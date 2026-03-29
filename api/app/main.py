@@ -21,7 +21,7 @@ from fastapi.responses import JSONResponse
 from app.config import Settings, get_settings
 from app.middleware.rate_limiter import close_redis, get_redis
 from app.models.base import init_db, close_db
-from app.routers import admin, detect, research, review, suggest
+from app.routers import admin, auth, detect, research, review, suggest
 
 # ── Logging ─────────────────────────────────────────────────────────────
 
@@ -122,6 +122,7 @@ def create_app() -> FastAPI:
 
     # ── Routers (all under /api/v1 prefix) ──────────────────────────────
     api_prefix = "/api/v1"
+    app.include_router(auth.router, prefix=api_prefix)
     app.include_router(detect.router, prefix=api_prefix)
     app.include_router(suggest.router, prefix=api_prefix)
     app.include_router(review.router, prefix=api_prefix)

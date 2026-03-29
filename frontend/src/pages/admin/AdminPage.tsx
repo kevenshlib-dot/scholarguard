@@ -1,9 +1,29 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import {
+  getFormulaParams,
+  updateFormulaParams,
+  getAuditLogs,
+} from "../../services/api";
+import type { FormulaParam, AuditLogEntry } from "../../services/api";
 
 type Tab = "model" | "formula" | "usage" | "audit";
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<Tab>("model");
+
+  /* ---- Formula state ---- */
+  const [formulaParams, setFormulaParams] = useState<FormulaParam[]>([]);
+  const [formulaLoading, setFormulaLoading] = useState(false);
+  const [formulaError, setFormulaError] = useState("");
+  const [formulaSaving, setFormulaSaving] = useState(false);
+  const [formulaSaved, setFormulaSaved] = useState(false);
+
+  /* ---- Audit state ---- */
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState("");
+  const [auditTotal, setAuditTotal] = useState(0);
+  const [auditPage, setAuditPage] = useState(1);
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "model", label: "模型配置" },
@@ -11,6 +31,71 @@ export default function AdminPage() {
     { key: "usage", label: "使用量统计" },
     { key: "audit", label: "审计日志" },
   ];
+
+  /* ---- Load formula params ---- */
+  const loadFormula = useCallback(async () => {
+    setFormulaLoading(true);
+    setFormulaError("");
+    try {
+      const params = await getFormulaParams();
+      setFormulaParams(params);
+    } catch (err) {
+      setFormulaError(
+        err instanceof Error ? err.message : "加载公式参数失败"
+      );
+    } finally {
+      setFormulaLoading(false);
+    }
+  }, []);
+
+  /* ---- Save formula params ---- */
+  const saveFormula = async () => {
+    setFormulaSaving(true);
+    setFormulaSaved(false);
+    try {
+      await updateFormulaParams(formulaParams);
+      setFormulaSaved(true);
+    } catch (err) {
+      setFormulaError(
+        err instanceof Error ? err.message : "保存公式参数失败"
+      );
+    } finally {
+      setFormulaSaving(false);
+    }
+  };
+
+  /* ---- Load audit logs ---- */
+  const loadAuditLogs = useCallback(async (page: number) => {
+    setAuditLoading(true);
+    setAuditError("");
+    try {
+      const result = await getAuditLogs(page, 20);
+      setAuditLogs(result.items);
+      setAuditTotal(result.total);
+    } catch (err) {
+      setAuditError(
+        err instanceof Error ? err.message : "加载审计日志失败"
+      );
+    } finally {
+      setAuditLoading(false);
+    }
+  }, []);
+
+  /* ---- Load data when switching tabs ---- */
+  useEffect(() => {
+    if (activeTab === "formula") {
+      loadFormula();
+    } else if (activeTab === "audit") {
+      loadAuditLogs(auditPage);
+    }
+  }, [activeTab, auditPage, loadFormula, loadAuditLogs]);
+
+  const handleParamChange = (index: number, value: number) => {
+    setFormulaParams((prev) =>
+      prev.map((p, i) => (i === index ? { ...p, value } : p))
+    );
+    setFormulaSaved(false);
+  };
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
@@ -104,53 +189,58 @@ export default function AdminPage() {
           <p className="text-sm text-gray-500">
             Risk = w1*P(model) + w2*P(stat) + w3*P(semantic) - w4*Evidence
           </p>
-          <div className="grid grid-cols-4 gap-4">
-            {[
-              { name: "w1 (模型概率权重)", defaultVal: "0.35" },
-              { name: "w2 (统计特征权重)", defaultVal: "0.25" },
-              { name: "w3 (语义分析权重)", defaultVal: "0.25" },
-              { name: "w4 (证据折减系数)", defaultVal: "0.15" },
-            ].map((p) => (
-              <div key={p.name}>
-                <label className="block text-xs font-medium text-gray-500 mb-1">
-                  {p.name}
-                </label>
-                <input
-                  type="number"
-                  className="input"
-                  defaultValue={p.defaultVal}
-                  step={0.05}
-                  min={0}
-                  max={1}
-                />
-              </div>
-            ))}
-          </div>
 
-          <h4 className="font-semibold text-gray-900 pt-4">风险等级阈值</h4>
-          <div className="grid grid-cols-4 gap-4">
-            {[
-              { label: "低风险上限", val: "0.30", color: "text-green-600" },
-              { label: "中风险上限", val: "0.55", color: "text-yellow-600" },
-              { label: "高风险上限", val: "0.80", color: "text-red-600" },
-              { label: "极高风险阈值", val: "0.80", color: "text-purple-600" },
-            ].map((t) => (
-              <div key={t.label}>
-                <label className={`block text-xs font-medium mb-1 ${t.color}`}>
-                  {t.label}
-                </label>
-                <input
-                  type="number"
-                  className="input"
-                  defaultValue={t.val}
-                  step={0.05}
-                  min={0}
-                  max={1}
-                />
-              </div>
-            ))}
+          {formulaLoading && (
+            <p className="text-sm text-gray-500">加载中...</p>
+          )}
+
+          {formulaError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              {formulaError}
+            </div>
+          )}
+
+          {!formulaLoading && formulaParams.length > 0 && (
+            <div className="grid grid-cols-4 gap-4">
+              {formulaParams.map((p, i) => (
+                <div key={p.key}>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    {p.label || p.key}
+                  </label>
+                  <input
+                    type="number"
+                    className="input"
+                    value={p.value}
+                    step={p.step ?? 0.05}
+                    min={p.min ?? 0}
+                    max={p.max ?? 1}
+                    onChange={(e) =>
+                      handleParamChange(i, parseFloat(e.target.value) || 0)
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!formulaLoading && formulaParams.length === 0 && !formulaError && (
+            <p className="text-sm text-gray-400">暂无公式参数数据</p>
+          )}
+
+          <div className="flex items-center gap-3">
+            <button
+              className="btn-primary"
+              disabled={formulaSaving || formulaParams.length === 0}
+              onClick={saveFormula}
+            >
+              {formulaSaving ? "保存中..." : "保存参数"}
+            </button>
+            {formulaSaved && (
+              <span className="text-xs text-green-600 font-medium">
+                保存成功
+              </span>
+            )}
           </div>
-          <button className="btn-primary">保存参数</button>
         </div>
       )}
 
@@ -170,7 +260,9 @@ export default function AdminPage() {
                 {s.trend && (
                   <p
                     className={`text-xs mt-1 font-medium ${
-                      s.trend.startsWith("+") ? "text-green-600" : "text-blue-600"
+                      s.trend.startsWith("+")
+                        ? "text-green-600"
+                        : "text-blue-600"
                     }`}
                   >
                     {s.trend}
@@ -193,46 +285,40 @@ export default function AdminPage() {
       {activeTab === "audit" && (
         <div className="card">
           <h4 className="font-semibold text-gray-900 mb-4">审计日志</h4>
+
+          {auditLoading && (
+            <p className="text-sm text-gray-500 mb-4">加载中...</p>
+          )}
+
+          {auditError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm mb-4">
+              {auditError}
+            </div>
+          )}
+
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 text-left">
-                  <th className="pb-2 text-xs font-medium text-gray-500">时间</th>
-                  <th className="pb-2 text-xs font-medium text-gray-500">操作</th>
-                  <th className="pb-2 text-xs font-medium text-gray-500">用户</th>
-                  <th className="pb-2 text-xs font-medium text-gray-500">详情</th>
+                  <th className="pb-2 text-xs font-medium text-gray-500">
+                    时间
+                  </th>
+                  <th className="pb-2 text-xs font-medium text-gray-500">
+                    操作
+                  </th>
+                  <th className="pb-2 text-xs font-medium text-gray-500">
+                    用户
+                  </th>
+                  <th className="pb-2 text-xs font-medium text-gray-500">
+                    详情
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {[
-                  {
-                    time: "2026-03-29 10:23",
-                    action: "检测提交",
-                    user: "user_001",
-                    detail: "提交文档检测，3,200字",
-                  },
-                  {
-                    time: "2026-03-29 09:15",
-                    action: "参数修改",
-                    user: "admin",
-                    detail: "修改w1权重: 0.30 → 0.35",
-                  },
-                  {
-                    time: "2026-03-28 16:45",
-                    action: "复核完成",
-                    user: "reviewer_02",
-                    detail: "维持判定 det-003",
-                  },
-                  {
-                    time: "2026-03-28 14:00",
-                    action: "模型更新",
-                    user: "admin",
-                    detail: "切换至 ScholarGuard-Detect-v1",
-                  },
-                ].map((log, i) => (
-                  <tr key={i}>
+                {auditLogs.map((log) => (
+                  <tr key={log.id}>
                     <td className="py-2.5 text-gray-500 whitespace-nowrap">
-                      {log.time}
+                      {log.timestamp}
                     </td>
                     <td className="py-2.5">
                       <span className="inline-block px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">
@@ -243,9 +329,44 @@ export default function AdminPage() {
                     <td className="py-2.5 text-gray-600">{log.detail}</td>
                   </tr>
                 ))}
+                {!auditLoading && auditLogs.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="py-8 text-center text-gray-400 text-sm"
+                    >
+                      暂无审计日志
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
+
+          {/* Pagination */}
+          {auditTotal > 20 && (
+            <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
+              <p className="text-xs text-gray-500">
+                共 {auditTotal} 条记录
+              </p>
+              <div className="flex gap-2">
+                <button
+                  className="btn-secondary text-xs"
+                  disabled={auditPage <= 1}
+                  onClick={() => setAuditPage((p) => Math.max(1, p - 1))}
+                >
+                  上一页
+                </button>
+                <button
+                  className="btn-secondary text-xs"
+                  disabled={auditPage * 20 >= auditTotal}
+                  onClick={() => setAuditPage((p) => p + 1)}
+                >
+                  下一页
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

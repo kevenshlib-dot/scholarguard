@@ -5,10 +5,22 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 const client = axios.create({
   baseURL: BASE_URL,
   timeout: 60_000,
-  headers: { "Content-Type": "application/json" },
+  headers: {
+    "Content-Type": "application/json",
+    "X-API-Key": "sg-test-key-001",
+  },
 });
 
-/* ---------- Types ---------- */
+/* ---------- API Envelope ---------- */
+
+export interface APIResponse<T> {
+  code: number;
+  message: string;
+  data: T;
+  meta?: Record<string, unknown>;
+}
+
+/* ---------- Detection Types ---------- */
 
 export interface DetectRequest {
   text: string;
@@ -17,10 +29,9 @@ export interface DetectRequest {
   discipline: string;
 }
 
-export interface DetectTaskResponse {
+export interface DetectTaskData {
   task_id: string;
   status: string;
-  message?: string;
 }
 
 export interface ParagraphScore {
@@ -30,11 +41,13 @@ export interface ParagraphScore {
   risk_level: string;
 }
 
-export interface DetectResult {
+export interface DetectResultData {
   task_id: string;
   status: "pending" | "processing" | "completed" | "failed";
   risk_level?: string;
   risk_score?: number;
+  llm_confidence?: number;
+  statistical_score?: number;
   evidence_completeness?: number;
   paragraph_scores?: ParagraphScore[];
   evidence_summary?: string;
@@ -83,28 +96,98 @@ export interface ReviewItem {
   text_preview: string;
 }
 
+/* ---------- Admin Types ---------- */
+
+export interface FormulaParam {
+  key: string;
+  label: string;
+  value: number;
+  min?: number;
+  max?: number;
+  step?: number;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  action: string;
+  user: string;
+  detail: string;
+}
+
 /* ---------- API functions ---------- */
 
-export async function detectText(
+/**
+ * Submit text for detection. Returns 202 with task_id.
+ */
+export async function submitDetection(
   text: string,
   granularity: "document" | "paragraph" | "sentence",
   language: "auto" | "zh" | "en",
   discipline: string
-): Promise<DetectTaskResponse> {
-  const { data } = await client.post<DetectTaskResponse>("/detect", {
+): Promise<DetectTaskData> {
+  const { data } = await client.post<APIResponse<DetectTaskData>>("/detect", {
     text,
     granularity,
     language,
     discipline,
   });
-  return data;
+  return data.data;
 }
 
+/**
+ * Get the current status / result for a detection task.
+ */
 export async function getDetectionResult(
   taskId: string
-): Promise<DetectResult> {
-  const { data } = await client.get<DetectResult>(`/detect/${taskId}`);
-  return data;
+): Promise<DetectResultData> {
+  const { data } = await client.get<APIResponse<DetectResultData>>(
+    `/detect/${taskId}`
+  );
+  return data.data;
+}
+
+/**
+ * Poll GET /detect/{taskId} every 5 seconds until status is "completed" or "failed".
+ * Resolves with the final result. Rejects after maxAttempts (default 60 = 5 min).
+ */
+export function pollDetectionResult(
+  taskId: string,
+  onProgress?: (status: string) => void,
+  intervalMs = 5000,
+  maxAttempts = 60
+): Promise<DetectResultData> {
+  return new Promise((resolve, reject) => {
+    let attempts = 0;
+
+    const tick = async () => {
+      try {
+        attempts++;
+        const result = await getDetectionResult(taskId);
+
+        if (result.status === "completed" || result.status === "failed") {
+          resolve(result);
+          return;
+        }
+
+        if (attempts >= maxAttempts) {
+          resolve({
+            ...result,
+            status: "failed" as const,
+            error: "检测超时，请稍后重试",
+          });
+          return;
+        }
+
+        onProgress?.(result.status);
+        setTimeout(tick, intervalMs);
+      } catch (err) {
+        reject(err);
+      }
+    };
+
+    tick();
+  });
 }
 
 export async function submitFeedback(
@@ -112,43 +195,50 @@ export async function submitFeedback(
   type: "agree" | "disagree" | "partial",
   comment: string
 ): Promise<{ success: boolean }> {
-  const { data } = await client.post<{ success: boolean }>("/feedback", {
-    detection_id: detectionId,
-    type,
-    comment,
-  });
-  return data;
+  const { data } = await client.post<APIResponse<{ success: boolean }>>(
+    "/feedback",
+    {
+      detection_id: detectionId,
+      type,
+      comment,
+    }
+  );
+  return data.data;
 }
 
 export async function getSuggestions(
   text: string,
   strategies: string[]
 ): Promise<SuggestResult> {
-  const { data } = await client.post<SuggestResult>("/suggest", {
+  const { data } = await client.post<APIResponse<SuggestResult>>("/suggest", {
     text,
     strategies,
   });
-  return data;
+  return data.data;
 }
 
 export async function searchLiterature(
   query: string,
   topK: number = 5
 ): Promise<{ results: LiteratureItem[] }> {
-  const { data } = await client.post<{ results: LiteratureItem[] }>(
-    "/research/search",
-    { query, top_k: topK }
-  );
-  return data;
+  const { data } = await client.post<
+    APIResponse<{ results: LiteratureItem[] }>
+  >("/research/search", { query, top_k: topK });
+  return data.data;
 }
+
+/* ---------- Review API ---------- */
 
 export async function getReviewList(
   status?: string
 ): Promise<{ items: ReviewItem[] }> {
-  const { data } = await client.get<{ items: ReviewItem[] }>("/reviews", {
-    params: { status },
-  });
-  return data;
+  const { data } = await client.get<APIResponse<{ items: ReviewItem[] }>>(
+    "/reviews",
+    {
+      params: { status },
+    }
+  );
+  return data.data;
 }
 
 export async function submitReview(
@@ -156,11 +246,42 @@ export async function submitReview(
   decision: "maintain" | "adjust" | "dismiss",
   comment: string
 ): Promise<{ success: boolean }> {
-  const { data } = await client.post<{ success: boolean }>(
+  const { data } = await client.post<APIResponse<{ success: boolean }>>(
     `/reviews/${reviewId}/decide`,
     { decision, comment }
   );
-  return data;
+  return data.data;
+}
+
+/* ---------- Admin API ---------- */
+
+export async function getFormulaParams(): Promise<FormulaParam[]> {
+  const { data } = await client.get<APIResponse<FormulaParam[]>>(
+    "/admin/formula-params"
+  );
+  return data.data;
+}
+
+export async function updateFormulaParams(
+  params: FormulaParam[]
+): Promise<{ success: boolean }> {
+  const { data } = await client.post<APIResponse<{ success: boolean }>>(
+    "/admin/formula-params",
+    { params }
+  );
+  return data.data;
+}
+
+export async function getAuditLogs(
+  page = 1,
+  pageSize = 20
+): Promise<{ items: AuditLogEntry[]; total: number }> {
+  const { data } = await client.get<
+    APIResponse<{ items: AuditLogEntry[]; total: number }>
+  >("/admin/audit-logs", {
+    params: { page, page_size: pageSize },
+  });
+  return data.data;
 }
 
 export default client;

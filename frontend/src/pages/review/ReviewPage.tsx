@@ -1,53 +1,24 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import RiskBadge from "../../components/RiskBadge";
+import { getReviewList, submitReview } from "../../services/api";
+import type { ReviewItem } from "../../services/api";
 
 type Tab = "pending" | "appeals" | "stats";
-
-interface ReviewItem {
-  id: string;
-  detection_id: string;
-  submitted_at: string;
-  risk_level: string;
-  risk_score: number;
-  text_preview: string;
-  status: string;
-}
-
-const mockPending: ReviewItem[] = [
-  {
-    id: "rev-001",
-    detection_id: "det-003",
-    submitted_at: "2026-03-29 08:12",
-    risk_level: "high",
-    risk_score: 0.78,
-    text_preview: "The impact of artificial intelligence on modern governance structures...",
-    status: "pending",
-  },
-  {
-    id: "rev-002",
-    detection_id: "det-005",
-    submitted_at: "2026-03-28 15:30",
-    risk_level: "medium",
-    risk_score: 0.48,
-    text_preview: "在经济全球化的大背景下，数字货币的发展引发了...",
-    status: "pending",
-  },
-  {
-    id: "rev-003",
-    detection_id: "det-007",
-    submitted_at: "2026-03-27 11:00",
-    risk_level: "critical",
-    risk_score: 0.92,
-    text_preview: "本文通过大规模语言模型的系统分析，探讨了人工智能在...",
-    status: "pending",
-  },
-];
 
 export default function ReviewPage() {
   const [activeTab, setActiveTab] = useState<Tab>("pending");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [decision, setDecision] = useState<"maintain" | "adjust" | "dismiss">("maintain");
+  const [decision, setDecision] = useState<"maintain" | "adjust" | "dismiss">(
+    "maintain"
+  );
   const [comment, setComment] = useState("");
+
+  /* ---- Data state ---- */
+  const [reviews, setReviews] = useState<ReviewItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "pending", label: "待复核" },
@@ -55,7 +26,46 @@ export default function ReviewPage() {
     { key: "stats", label: "反馈统计" },
   ];
 
-  const selected = mockPending.find((r) => r.id === selectedId);
+  /* ---- Load reviews ---- */
+  const loadReviews = useCallback(async (status?: string) => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await getReviewList(status);
+      setReviews(result.items);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "加载复核列表失败");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "pending") {
+      loadReviews("pending");
+    }
+  }, [activeTab, loadReviews]);
+
+  const selected = reviews.find((r) => r.id === selectedId);
+
+  /* ---- Submit review decision ---- */
+  const handleSubmitReview = async () => {
+    if (!selectedId) return;
+    setSubmitting(true);
+    setSubmitSuccess(false);
+    try {
+      await submitReview(selectedId, decision, comment);
+      setSubmitSuccess(true);
+      setComment("");
+      // Reload the list to reflect status change
+      loadReviews("pending");
+      setSelectedId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "提交复核决定失败");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
@@ -79,12 +89,32 @@ export default function ReviewPage() {
         ))}
       </div>
 
+      {/* Error */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+          {error}
+        </div>
+      )}
+
+      {/* Success */}
+      {submitSuccess && (
+        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+          复核决定已提交
+        </div>
+      )}
+
       {/* Pending reviews */}
       {activeTab === "pending" && (
         <div className="grid grid-cols-5 gap-6">
           {/* List */}
           <div className="col-span-2 space-y-2">
-            {mockPending.map((item) => (
+            {loading && (
+              <p className="text-sm text-gray-500 py-4">加载中...</p>
+            )}
+            {!loading && reviews.length === 0 && (
+              <p className="text-sm text-gray-400 py-4">暂无待复核项</p>
+            )}
+            {reviews.map((item) => (
               <button
                 key={item.id}
                 className={`w-full text-left p-3 rounded-lg border transition-colors ${
@@ -92,14 +122,27 @@ export default function ReviewPage() {
                     ? "border-brand-500 bg-brand-50"
                     : "border-gray-200 hover:border-gray-300"
                 }`}
-                onClick={() => setSelectedId(item.id)}
+                onClick={() => {
+                  setSelectedId(item.id);
+                  setSubmitSuccess(false);
+                }}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-gray-400">{item.submitted_at}</span>
-                  <RiskBadge level={item.risk_level} score={item.risk_score} size="sm" />
+                  <span className="text-xs text-gray-400">
+                    {item.submitted_at}
+                  </span>
+                  <RiskBadge
+                    level={item.risk_level}
+                    score={item.risk_score}
+                    size="sm"
+                  />
                 </div>
-                <p className="text-sm text-gray-700 truncate">{item.text_preview}</p>
-                <p className="text-xs text-gray-400 mt-1">{item.detection_id}</p>
+                <p className="text-sm text-gray-700 truncate">
+                  {item.text_preview}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {item.detection_id}
+                </p>
               </button>
             ))}
           </div>
@@ -110,7 +153,10 @@ export default function ReviewPage() {
               <div className="card space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="font-semibold text-gray-900">复核详情</h4>
-                  <RiskBadge level={selected.risk_level} score={selected.risk_score} />
+                  <RiskBadge
+                    level={selected.risk_level}
+                    score={selected.risk_score}
+                  />
                 </div>
                 <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 rounded-lg p-4">
                   {selected.text_preview}
@@ -126,7 +172,10 @@ export default function ReviewPage() {
                         ["dismiss", "撤销判定"],
                       ] as const
                     ).map(([val, label]) => (
-                      <label key={val} className="flex items-center gap-1.5 text-sm">
+                      <label
+                        key={val}
+                        className="flex items-center gap-1.5 text-sm"
+                      >
                         <input
                           type="radio"
                           name="decision"
@@ -145,7 +194,13 @@ export default function ReviewPage() {
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                   />
-                  <button className="btn-primary">提交复核</button>
+                  <button
+                    className="btn-primary"
+                    disabled={submitting}
+                    onClick={handleSubmitReview}
+                  >
+                    {submitting ? "提交中..." : "提交复核"}
+                  </button>
                 </div>
               </div>
             ) : (
@@ -176,7 +231,10 @@ export default function ReviewPage() {
               { label: "待处理复核", value: "3" },
               { label: "本月申诉", value: "5" },
             ].map((stat) => (
-              <div key={stat.label} className="bg-gray-50 rounded-lg p-4 text-center">
+              <div
+                key={stat.label}
+                className="bg-gray-50 rounded-lg p-4 text-center"
+              >
                 <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
                 <p className="text-xs text-gray-500 mt-1">{stat.label}</p>
               </div>
