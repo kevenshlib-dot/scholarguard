@@ -148,6 +148,9 @@ class LLMClient:
                     kwargs["api_key"] = "not-needed"  # vLLM不需要API key
                     # Qwen3.5: 禁用thinking mode以获取结构化JSON输出
                     kwargs["extra_body"] = {"chat_template_kwargs": {"enable_thinking": False}}
+                    # vLLM性能优化参数
+                    kwargs["top_p"] = 0.9              # 略微缩小采样空间
+                    kwargs["repetition_penalty"] = 1.0  # 结构化输出无需重复惩罚
 
                 # JSON模式 - vLLM/Qwen可能不支持json_object格式
                 # ���用prompt中要求JSON输出

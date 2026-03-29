@@ -1,11 +1,14 @@
 """
 ScholarGuard 主评议Agent Prompt - 精简版（优化推理速度）
-Version: v1.0-compact
+Version: v2.0-compact — 合并评议+报告为单次调用
 """
 
 PRIMARY_REVIEW_SYSTEM_COMPACT = "你是学术文本AI检测专家。只输出JSON，不要解释。"
 
-PRIMARY_REVIEW_PROMPT_COMPACT = """分析下文是否为AI生成，输出JSON。
+# ── 合并后的单次调用 prompt（评议 + 报告） ──────────────────────────────
+# 将原先 primary_review + explanation 两次LLM调用合并为一次
+# 使用短字段名减少输出token
+PRIMARY_REVIEW_PROMPT_COMPACT = """分析下文是否为AI生成，同时给出风险报告。输出JSON。
 
 文本：
 ---
@@ -13,10 +16,13 @@ PRIMARY_REVIEW_PROMPT_COMPACT = """分析下文是否为AI生成，输出JSON。
 ---
 
 输出格式（严格JSON，无其他内容）：
-{{"llm_confidence":<0-1>,"risk_level":"<low/medium/high/critical>","dimension_scores":{{"vocabulary_diversity":<1-10>,"syntactic_variation":<1-10>,"argumentation_naturalness":<1-10>}},"source_classification":{{"human_original":<0-1>,"ai_generated":<0-1>,"ai_human_edited":<0-1>,"humanizer_processed":<0-1>}},"pattern_flags":{{"logical_connector_density":<0-10>,"sentence_length_uniformity":<0-10>,"terminology_stacking":<0-10>}},"flagged_segments":[{{"start_char":0,"end_char":0,"text_snippet":"","issue":""}}],"reasoning":"<50字以内>","uncertainty_notes":"<30字以内>"}}
+{{"conf":<0-1>,"lvl":"<low/medium/high/critical>","dim":{{"vd":<1-10>,"sv":<1-10>,"an":<1-10>}},"src":{{"human":<0-1>,"ai":<0-1>,"edited":<0-1>,"humanizer":<0-1>}},"flags":{{"lcd":<0-10>,"slu":<0-10>,"ts":<0-10>}},"segs":[{{"s":0,"e":0,"t":"","i":""}}],"reason":"<50字以内>","unc":"<30字以内>","rpt":{{"summary":"<一句话>","for":["证据1"],"against":["反向证据1"],"disclaimer":"<结论边界>","actions":["建议1"],"review":<true/false>,"review_why":"<原因或null>"}}}}
 
-判断标准：low=自然人类写作,medium=部分AI特征,high=明显AI特征,critical=确定AI生成"""
+判断标准：low=自然人类写作,medium=部分AI特征,high=明显AI特征,critical=确定AI生成
+rpt.summary=风险概述,rpt.for=支撑证据,rpt.against=反向证据,rpt.actions=建议操作"""
 
+
+# ── 旧版独立 explanation prompt（保留兼容，但主流程不再使用）────────────
 EXPLANATION_PROMPT_COMPACT = """根据检测结果生成风险报告，输出JSON。
 
 检测数据：风险分={risk_score}，LLM证据={llm_evidence_brief}，统计证据={stat_evidence}

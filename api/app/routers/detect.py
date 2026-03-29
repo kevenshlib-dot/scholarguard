@@ -290,6 +290,69 @@ async def get_detection_result(
 
 
 @router.post(
+    "/{task_id}/heatmap",
+    response_model=APIResponse,
+    summary="Generate paragraph-level heatmap for a completed detection",
+)
+async def generate_heatmap(
+    task_id: str,
+    user: UserContext = Depends(get_current_active_user),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_async_session),
+) -> APIResponse:
+    """Trigger paragraph-level heatmap generation for a completed detection.
+
+    The heatmap is generated asynchronously. The ``heatmap_status`` field on
+    the detection result transitions from ``pending`` to ``completed`` once
+    the heatmap data is available. Poll ``GET /detect/{task_id}`` to check.
+    """
+    from app.tasks.detection_task import run_heatmap
+
+    try:
+        detection_uuid = uuid.UUID(task_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid task_id format: {task_id}",
+        )
+
+    stmt = select(DetectionResult).where(DetectionResult.id == detection_uuid)
+    row = await session.execute(stmt)
+    detection = row.scalar_one_or_none()
+
+    if detection is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Task {task_id} not found",
+        )
+
+    if detection.status != "completed":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Detection must be completed before generating heatmap",
+        )
+
+    # If already completed, return existing data
+    if detection.heatmap_status == "completed" and detection.paragraph_heatmap:
+        return APIResponse(
+            data={"heatmap_status": "completed", "paragraph_heatmap": detection.paragraph_heatmap},
+            meta=Meta(request_id=task_id),
+        )
+
+    # Dispatch heatmap generation task
+    run_heatmap.delay(
+        detection_result_id=task_id,
+    )
+
+    return APIResponse(
+        code=202,
+        message="Heatmap generation started",
+        data={"heatmap_status": "pending"},
+        meta=Meta(request_id=task_id),
+    )
+
+
+@router.post(
     "/batch",
     response_model=APIResponse[BatchDetectResponse],
     status_code=status.HTTP_202_ACCEPTED,

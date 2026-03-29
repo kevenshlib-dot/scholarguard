@@ -95,6 +95,17 @@ class DetectionResult(Base):
         Text, nullable=True
     )
 
+    # ── heatmap (deferred generation) ──────────────────────────────
+    paragraph_heatmap: Mapped[Optional[dict]] = mapped_column(
+        JSON, nullable=True, comment="Paragraph-level risk heatmap data"
+    )
+    heatmap_status: Mapped[Optional[str]] = mapped_column(
+        String(20),
+        nullable=True,
+        server_default=text("'not_requested'"),
+        comment="not_requested | pending | completed",
+    )
+
     # ── versioning ───────────────────────────────────────────────────
     formula_version: Mapped[Optional[str]] = mapped_column(
         String(50), nullable=True
