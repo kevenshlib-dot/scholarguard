@@ -9,16 +9,27 @@ from __future__ import annotations
 
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy import select, func, update, desc
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
 from app.middleware.auth import UserContext, require_role
 from app.middleware.rate_limiter import rate_limit
-from app.schemas.common import APIResponse, Meta, PaginationParams
+from app.models.base import get_async_session
+from app.models.detection import DetectionResult
+from app.models.review import ReviewRecord, AppealRecord, Feedback
+from app.models.system import (
+    AuditLog,
+    FormulaParam,
+    ModelConfig,
+    UsageStat,
+)
+from app.schemas.common import APIResponse, Meta, PaginatedMeta, PaginationParams
 
 router = APIRouter(tags=["Admin"])
 
@@ -101,37 +112,6 @@ class FormulaParamsUpdate(BaseModel):
     )
 
 
-# ── In-memory stores (replace with DB in production) ────────────────────
-
-_models: list[ModelInfo] = [
-    ModelInfo(
-        model_id="ollama-llama3",
-        name="Llama 3 (Ollama)",
-        provider="ollama",
-        version="3.0",
-        capabilities=["detection", "suggestion"],
-    ),
-]
-_route_config = ModelRouteConfig(
-    detection_model="ollama-llama3",
-    suggestion_model="ollama-llama3",
-)
-_formula_params = FormulaParams(
-    formula_version="1.0.0",
-    param_version="1.0.0",
-    weights={
-        "llm_confidence": 0.4,
-        "statistical_score": 0.35,
-        "stylistic_score": 0.25,
-    },
-    thresholds={
-        "low_max": 0.3,
-        "medium_max": 0.6,
-        "high_max": 0.85,
-    },
-)
-
-
 # ── Routes ──────────────────────────────────────────────────────────────
 
 
@@ -144,6 +124,7 @@ _formula_params = FormulaParams(
 async def list_models(
     user: UserContext = Depends(require_role("admin")),
     settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_async_session),
 ) -> APIResponse[list[ModelInfo]]:
     """Return a list of all registered detection / suggestion models.
 
@@ -151,8 +132,37 @@ async def list_models(
     supported capabilities.
     """
     request_id = str(uuid.uuid4())
+
+    stmt = select(ModelConfig).where(ModelConfig.is_active == True)
+    result = await session.execute(stmt)
+    configs = result.scalars().all()
+
+    models = [
+        ModelInfo(
+            model_id=str(cfg.id),
+            name=cfg.primary_model,
+            provider=cfg.task_type,
+            version="1.0",
+            is_active=cfg.is_active,
+            capabilities=[cfg.task_type],
+        )
+        for cfg in configs
+    ]
+
+    # If no models in DB, return a sensible default
+    if not models:
+        models = [
+            ModelInfo(
+                model_id="ollama-llama3",
+                name="Llama 3 (Ollama)",
+                provider="ollama",
+                version="3.0",
+                capabilities=["detection", "suggestion"],
+            ),
+        ]
+
     return APIResponse(
-        data=_models,
+        data=models,
         meta=Meta(request_id=request_id),
     )
 
@@ -166,6 +176,7 @@ async def list_models(
 async def configure_model_routing(
     body: ModelRouteConfig,
     user: UserContext = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_async_session),
 ) -> APIResponse[ModelRouteConfig]:
     """Update which models are used for detection and suggestion tasks.
 
@@ -173,14 +184,57 @@ async def configure_model_routing(
     fallback model.  The configuration takes effect immediately for new
     requests.
     """
-    global _route_config
-    _route_config = body
+    user_uuid = uuid.UUID(user.user_id) if not isinstance(user.user_id, uuid.UUID) else user.user_id
 
-    # TODO: Persist to database.
+    # Upsert detection model config
+    stmt = select(ModelConfig).where(ModelConfig.task_type == "detection")
+    result = await session.execute(stmt)
+    detection_cfg = result.scalar_one_or_none()
+
+    if detection_cfg:
+        detection_cfg.primary_model = body.detection_model
+        detection_cfg.fallback_model = body.fallback_model
+        detection_cfg.updated_at = datetime.now(timezone.utc)
+    else:
+        detection_cfg = ModelConfig(
+            task_type="detection",
+            primary_model=body.detection_model,
+            fallback_model=body.fallback_model,
+        )
+        session.add(detection_cfg)
+
+    # Upsert suggestion model config
+    stmt = select(ModelConfig).where(ModelConfig.task_type == "suggestion")
+    result = await session.execute(stmt)
+    suggestion_cfg = result.scalar_one_or_none()
+
+    if suggestion_cfg:
+        suggestion_cfg.primary_model = body.suggestion_model
+        suggestion_cfg.updated_at = datetime.now(timezone.utc)
+    else:
+        suggestion_cfg = ModelConfig(
+            task_type="suggestion",
+            primary_model=body.suggestion_model,
+        )
+        session.add(suggestion_cfg)
+
+    # Audit log
+    audit = AuditLog(
+        user_id=user_uuid,
+        action="configure_model_routing",
+        resource_type="model_config",
+        resource_id="routing",
+        details={
+            "detection_model": body.detection_model,
+            "suggestion_model": body.suggestion_model,
+            "fallback_model": body.fallback_model,
+        },
+    )
+    session.add(audit)
 
     request_id = str(uuid.uuid4())
     return APIResponse(
-        data=_route_config,
+        data=body,
         meta=Meta(request_id=request_id),
     )
 
@@ -193,6 +247,7 @@ async def configure_model_routing(
 )
 async def get_usage_stats(
     user: UserContext = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_async_session),
 ) -> APIResponse[UsageStats]:
     """Return aggregated platform usage statistics.
 
@@ -202,8 +257,50 @@ async def get_usage_stats(
     """
     request_id = str(uuid.uuid4())
 
-    # TODO: Query actual metrics from the database / metrics store.
-    stats = UsageStats()
+    # Total detections
+    total_det_result = await session.execute(select(func.count(DetectionResult.id)))
+    total_detections = total_det_result.scalar() or 0
+
+    # Total reviews
+    total_rev_result = await session.execute(select(func.count(ReviewRecord.id)))
+    total_reviews = total_rev_result.scalar() or 0
+
+    # Total appeals
+    total_app_result = await session.execute(select(func.count(AppealRecord.id)))
+    total_appeals = total_app_result.scalar() or 0
+
+    # Total suggestions (count audit log entries with action containing 'suggest')
+    total_sug_result = await session.execute(
+        select(func.count(AuditLog.id)).where(AuditLog.action.ilike("%suggest%"))
+    )
+    total_suggestions = total_sug_result.scalar() or 0
+
+    # Detections today
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    det_today_result = await session.execute(
+        select(func.count(DetectionResult.id)).where(
+            DetectionResult.created_at >= today_start
+        )
+    )
+    detections_today = det_today_result.scalar() or 0
+
+    # Average processing time
+    avg_result = await session.execute(
+        select(func.avg(DetectionResult.processing_time_ms)).where(
+            DetectionResult.processing_time_ms.isnot(None)
+        )
+    )
+    avg_processing = avg_result.scalar()
+    average_processing_ms = float(avg_processing) if avg_processing else 0.0
+
+    stats = UsageStats(
+        total_detections=total_detections,
+        total_suggestions=total_suggestions,
+        total_reviews=total_reviews,
+        total_appeals=total_appeals,
+        detections_today=detections_today,
+        average_processing_ms=round(average_processing_ms, 2),
+    )
 
     return APIResponse(
         data=stats,
@@ -221,6 +318,7 @@ async def get_audit_logs(
     page: int = 1,
     page_size: int = 20,
     user: UserContext = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_async_session),
 ) -> APIResponse[list[AuditLogEntry]]:
     """Return paginated audit log entries.
 
@@ -229,12 +327,44 @@ async def get_audit_logs(
     """
     request_id = str(uuid.uuid4())
 
-    # TODO: Query audit log table with pagination.
-    logs: list[AuditLogEntry] = []
+    # Get total count
+    count_result = await session.execute(select(func.count(AuditLog.id)))
+    total = count_result.scalar() or 0
+
+    # Paginated query
+    offset = (page - 1) * page_size
+    stmt = (
+        select(AuditLog)
+        .order_by(desc(AuditLog.created_at))
+        .offset(offset)
+        .limit(page_size)
+    )
+    result = await session.execute(stmt)
+    audit_logs = result.scalars().all()
+
+    entries = [
+        AuditLogEntry(
+            log_id=str(log.id),
+            timestamp=log.created_at,
+            user_id=str(log.user_id) if log.user_id else "system",
+            action=log.action,
+            resource=f"{log.resource_type}:{log.resource_id}" if log.resource_id else log.resource_type,
+            details=log.details,
+        )
+        for log in audit_logs
+    ]
+
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 0
 
     return APIResponse(
-        data=logs,
-        meta=Meta(request_id=request_id),
+        data=entries,
+        meta=PaginatedMeta(
+            request_id=request_id,
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        ),
     )
 
 
@@ -247,6 +377,7 @@ async def get_audit_logs(
 async def get_formula_params(
     user: UserContext = Depends(require_role("admin")),
     settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_async_session),
 ) -> APIResponse[FormulaParams]:
     """Return the current detection formula weights and thresholds.
 
@@ -255,12 +386,44 @@ async def get_formula_params(
     into the final risk score and classification.
     """
     request_id = str(uuid.uuid4())
+
+    # Query for the active formula params
+    stmt = select(FormulaParam).where(FormulaParam.is_active == True)
+    result = await session.execute(stmt)
+    active_param = result.scalar_one_or_none()
+
+    if active_param:
+        params_data = active_param.params or {}
+        formula = FormulaParams(
+            formula_version=settings.formula_version,
+            param_version=active_param.version,
+            weights=params_data.get("weights", {}),
+            thresholds=params_data.get("thresholds", {}),
+            updated_at=active_param.created_at,
+        )
+    else:
+        # Fallback to defaults if nothing in DB
+        formula = FormulaParams(
+            formula_version=settings.formula_version,
+            param_version=settings.param_version,
+            weights={
+                "llm_confidence": 0.4,
+                "statistical_score": 0.35,
+                "stylistic_score": 0.25,
+            },
+            thresholds={
+                "low_max": 0.3,
+                "medium_max": 0.6,
+                "high_max": 0.85,
+            },
+        )
+
     return APIResponse(
-        data=_formula_params,
+        data=formula,
         meta=Meta(
             request_id=request_id,
             formula_version=settings.formula_version,
-            param_version=settings.param_version,
+            param_version=formula.param_version,
         ),
     )
 
@@ -275,6 +438,7 @@ async def update_formula_params(
     body: FormulaParamsUpdate,
     user: UserContext = Depends(require_role("admin")),
     settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_async_session),
 ) -> APIResponse[FormulaParams]:
     """Update the detection formula weights and / or thresholds.
 
@@ -282,28 +446,89 @@ async def update_formula_params(
     values are preserved.  Changes take effect for new detection requests
     immediately.  The ``param_version`` is automatically incremented.
     """
-    global _formula_params
+    user_uuid = uuid.UUID(user.user_id) if not isinstance(user.user_id, uuid.UUID) else user.user_id
 
+    # Get current active params
+    stmt = select(FormulaParam).where(FormulaParam.is_active == True)
+    result = await session.execute(stmt)
+    current_param = result.scalar_one_or_none()
+
+    if current_param:
+        current_data = current_param.params or {}
+        current_weights = current_data.get("weights", {})
+        current_thresholds = current_data.get("thresholds", {})
+        current_version = current_param.version
+    else:
+        current_weights = {
+            "llm_confidence": 0.4,
+            "statistical_score": 0.35,
+            "stylistic_score": 0.25,
+        }
+        current_thresholds = {
+            "low_max": 0.3,
+            "medium_max": 0.6,
+            "high_max": 0.85,
+        }
+        current_version = settings.param_version
+
+    # Merge updates
     if body.weights:
-        _formula_params.weights.update(body.weights)
+        current_weights.update(body.weights)
     if body.thresholds:
-        _formula_params.thresholds.update(body.thresholds)
+        current_thresholds.update(body.thresholds)
 
-    # Bump param version.
-    parts = _formula_params.param_version.split(".")
+    # Bump version
+    parts = current_version.split(".")
     parts[-1] = str(int(parts[-1]) + 1)
-    _formula_params.param_version = ".".join(parts)
-    _formula_params.updated_at = datetime.utcnow()
-    _formula_params.updated_by = user.user_id
+    new_version = ".".join(parts)
 
-    # TODO: Persist to database.
+    # Deactivate old active params
+    if current_param:
+        current_param.is_active = False
+
+    # Create new version
+    new_param = FormulaParam(
+        version=new_version,
+        params={
+            "weights": current_weights,
+            "thresholds": current_thresholds,
+        },
+        description=f"Updated by {user.user_id}",
+        is_active=True,
+    )
+    session.add(new_param)
+    await session.flush()
+
+    # Audit log
+    audit = AuditLog(
+        user_id=user_uuid,
+        action="update_formula_params",
+        resource_type="formula_param",
+        resource_id=str(new_param.id),
+        details={
+            "old_version": current_version,
+            "new_version": new_version,
+            "weights_updated": body.weights is not None,
+            "thresholds_updated": body.thresholds is not None,
+        },
+    )
+    session.add(audit)
+
+    formula = FormulaParams(
+        formula_version=settings.formula_version,
+        param_version=new_version,
+        weights=current_weights,
+        thresholds=current_thresholds,
+        updated_at=datetime.now(timezone.utc),
+        updated_by=user.user_id,
+    )
 
     request_id = str(uuid.uuid4())
     return APIResponse(
-        data=_formula_params,
+        data=formula,
         meta=Meta(
             request_id=request_id,
             formula_version=settings.formula_version,
-            param_version=_formula_params.param_version,
+            param_version=new_version,
         ),
     )

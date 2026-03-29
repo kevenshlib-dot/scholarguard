@@ -112,6 +112,22 @@ class DetectionResult(Base):
         JSON, nullable=True
     )
 
+    # ── task status ─────────────────────────────────────────────────
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        server_default=text("'pending'"),
+        comment="pending | processing | completed | failed",
+    )
+    error_message: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True, comment="Error details when status is failed"
+    )
+
+    # ── batch tracking ──────────────────────────────────────────────
+    batch_id: Mapped[Optional[str]] = mapped_column(
+        String(36), nullable=True, index=True, comment="UUID of the batch this belongs to"
+    )
+
     # ── operational metadata ─────────────────────────────────────────
     processing_time_ms: Mapped[Optional[int]] = mapped_column(
         Integer, nullable=True

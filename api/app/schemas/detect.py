@@ -28,7 +28,7 @@ class RiskLevel(str, Enum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
-    VERY_HIGH = "very_high"
+    CRITICAL = "critical"
 
 
 class TaskStatus(str, Enum):

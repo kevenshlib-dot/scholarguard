@@ -20,6 +20,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import Settings, get_settings
 from app.middleware.rate_limiter import close_redis, get_redis
+from app.models.base import init_db, close_db
 from app.routers import admin, detect, research, review, suggest
 
 # ── Logging ─────────────────────────────────────────────────────────────
@@ -65,17 +66,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as exc:
         logger.warning("Redis unavailable at startup: %s", exc)
 
-    # TODO: Initialise async SQLAlchemy engine here.
-    # from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-    # engine = create_async_engine(settings.database_url, echo=False)
-    # async_session = async_sessionmaker(engine, expire_on_commit=False)
+    # Initialise async SQLAlchemy engine & session factory
+    await init_db()
+    logger.info("Database engine initialised: %s", settings.database_url.split("@")[-1])
 
     yield
 
     # ── Shutdown ────────────────────────────────────────────────────────
     logger.info("ScholarGuard API shutting down")
+    await close_db()
     await close_redis()
-    # TODO: await engine.dispose()
 
 
 # ── Application factory ─────────────────────────────────────────────────

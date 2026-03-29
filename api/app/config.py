@@ -40,8 +40,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 30
 
-    # ── Ollama ──────────────────────────────────────────────────────────
+    # ── Ollama / vLLM ──────────────────────────────────────────────────
     ollama_url: str = "http://localhost:11434"
+    vllm_url: Optional[str] = "http://192.168.31.18:8001/v1"
 
     # ── Optional LLM provider keys ──────────────────────────────────────
     openai_api_key: Optional[str] = None

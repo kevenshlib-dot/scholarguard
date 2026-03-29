@@ -13,10 +13,13 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
 from app.middleware.auth import UserContext, get_current_active_user
 from app.middleware.rate_limiter import rate_limit
+from app.models.base import get_async_session
+from app.models.system import AuditLog
 from app.schemas.common import APIResponse, Meta
 
 router = APIRouter(prefix="/research", tags=["Research (Demo)"])
@@ -94,6 +97,7 @@ async def literature_search(
     body: ResearchQueryRequest,
     user: UserContext = Depends(get_current_active_user),
     settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_async_session),
 ) -> APIResponse[ResearchQueryResponse]:
     """Search academic literature across configured databases.
 
@@ -103,6 +107,21 @@ async def literature_search(
     """
     start = time.perf_counter()
     request_id = str(uuid.uuid4())
+    user_uuid = uuid.UUID(user.user_id) if not isinstance(user.user_id, uuid.UUID) else user.user_id
+
+    # Audit log
+    audit = AuditLog(
+        user_id=user_uuid,
+        action="literature_search",
+        resource_type="research",
+        resource_id=request_id,
+        details={
+            "query": body.query,
+            "max_results": body.max_results,
+            "databases": body.databases,
+        },
+    )
+    session.add(audit)
 
     # TODO: Integrate with external academic search APIs.
     result = ResearchQueryResponse(results=[], total_found=0)
@@ -124,6 +143,7 @@ async def summarize_texts(
     body: SummarizeRequest,
     user: UserContext = Depends(get_current_active_user),
     settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_async_session),
 ) -> APIResponse[SummarizeResponse]:
     """Generate a summary of the supplied texts or abstracts.
 
@@ -132,6 +152,20 @@ async def summarize_texts(
     """
     start = time.perf_counter()
     request_id = str(uuid.uuid4())
+    user_uuid = uuid.UUID(user.user_id) if not isinstance(user.user_id, uuid.UUID) else user.user_id
+
+    # Audit log
+    audit = AuditLog(
+        user_id=user_uuid,
+        action="summarize_texts",
+        resource_type="research",
+        resource_id=request_id,
+        details={
+            "source_count": len(body.texts),
+            "style": body.style,
+        },
+    )
+    session.add(audit)
 
     # TODO: Invoke LLM summarisation pipeline.
     result = SummarizeResponse(

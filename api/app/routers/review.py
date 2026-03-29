@@ -11,9 +11,22 @@ import time
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.middleware.auth import UserContext, get_current_active_user, require_role
 from app.middleware.rate_limiter import rate_limit
+from app.models.base import get_async_session
+from app.models.detection import DetectionResult
+from app.models.review import (
+    AppealRecord,
+    AppealStatus as DBAppealStatus,
+    Feedback,
+    FeedbackType,
+    ReviewLabel,
+    ReviewRecord,
+)
+from app.models.system import AuditLog
 from app.schemas.common import APIResponse, Meta
 from app.schemas.review import (
     AppealRequest,
@@ -28,10 +41,28 @@ from app.schemas.review import (
 
 router = APIRouter(tags=["Review & Appeals"])
 
-# ── In-memory stores (replace with DB in production) ────────────────────
-_reviews: dict[str, ReviewResponse] = {}
-_appeals: dict[str, AppealResponse] = {}
-_feedback: dict[str, FeedbackResponse] = {}
+# ── Mapping helpers ───────────────────────────────────────────────────────
+
+_VERDICT_TO_LABEL = {
+    ReviewVerdict.CONFIRMED: ReviewLabel.MAINTAIN,
+    ReviewVerdict.OVERTURNED: ReviewLabel.DISMISS,
+    ReviewVerdict.INCONCLUSIVE: ReviewLabel.ADJUST,
+}
+
+_LABEL_TO_VERDICT = {v: k for k, v in _VERDICT_TO_LABEL.items()}
+
+_RATING_TO_FEEDBACK_TYPE = {
+    "accurate": FeedbackType.ACCURATE,
+    "partially_accurate": FeedbackType.ACCEPTABLE_ASSIST,
+    "inaccurate": FeedbackType.FALSE_POSITIVE,
+}
+
+_APPEAL_STATUS_MAP = {
+    DBAppealStatus.PENDING: AppealStatus.SUBMITTED,
+    DBAppealStatus.UNDER_REVIEW: AppealStatus.UNDER_REVIEW,
+    DBAppealStatus.RESOLVED: AppealStatus.RESOLVED,
+    DBAppealStatus.DISMISSED: AppealStatus.REJECTED,
+}
 
 
 @router.post(
@@ -44,6 +75,7 @@ async def submit_review(
     detection_id: str,
     body: ReviewRequest,
     user: UserContext = Depends(require_role("admin", "instructor")),
+    session: AsyncSession = Depends(get_async_session),
 ) -> APIResponse[ReviewResponse]:
     """Record a human reviewer's verdict on an existing detection result.
 
@@ -52,21 +84,81 @@ async def submit_review(
     the original detection for audit purposes.
     """
     start = time.perf_counter()
-    review_id = str(uuid.uuid4())
 
-    review = ReviewResponse(
-        review_id=review_id,
+    # Validate detection_id
+    try:
+        detection_uuid = uuid.UUID(detection_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid detection_id format: {detection_id}",
+        )
+
+    # Verify detection exists
+    stmt = select(DetectionResult).where(DetectionResult.id == detection_uuid)
+    row = await session.execute(stmt)
+    detection = row.scalar_one_or_none()
+    if detection is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Detection {detection_id} not found",
+        )
+
+    user_uuid = uuid.UUID(user.user_id) if not isinstance(user.user_id, uuid.UUID) else user.user_id
+
+    # Map schema verdict to DB review label
+    review_label = _VERDICT_TO_LABEL.get(body.verdict, ReviewLabel.MAINTAIN)
+
+    # Determine adjusted risk level based on verdict
+    adjusted_risk_level = None
+    if body.verdict == ReviewVerdict.OVERTURNED:
+        adjusted_risk_level = "low"
+    elif body.verdict == ReviewVerdict.INCONCLUSIVE:
+        adjusted_risk_level = "medium"
+
+    review = ReviewRecord(
+        detection_id=detection_uuid,
+        reviewer_id=user_uuid,
+        review_label=review_label.value,
+        review_comment=body.notes,
+        adjusted_risk_level=adjusted_risk_level,
+    )
+    session.add(review)
+    await session.flush()
+
+    # Update detection conclusion type to human_confirmed
+    detection.conclusion_type = "human_confirmed"
+    if body.verdict == ReviewVerdict.OVERTURNED:
+        detection.human_evidence = {
+            "reviewer_id": str(user_uuid),
+            "verdict": body.verdict.value,
+            "notes": body.notes,
+        }
+
+    # Audit log
+    audit = AuditLog(
+        user_id=user_uuid,
+        action="submit_review",
+        resource_type="review",
+        resource_id=str(review.id),
+        details={
+            "detection_id": detection_id,
+            "verdict": body.verdict.value,
+        },
+    )
+    session.add(audit)
+
+    response = ReviewResponse(
+        review_id=str(review.id),
         detection_id=detection_id,
         verdict=body.verdict,
+        reviewed_at=review.created_at,
     )
-    _reviews[review_id] = review
-
-    # TODO: Persist to database and update detection record.
 
     elapsed = (time.perf_counter() - start) * 1000
     return APIResponse(
-        data=review,
-        meta=Meta(request_id=review_id, processing_time_ms=round(elapsed, 2)),
+        data=response,
+        meta=Meta(request_id=str(review.id), processing_time_ms=round(elapsed, 2)),
     )
 
 
@@ -81,6 +173,7 @@ async def submit_appeal(
     detection_id: str,
     body: AppealRequest,
     user: UserContext = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_async_session),
 ) -> APIResponse[AppealResponse]:
     """Allow a student or author to appeal a detection verdict.
 
@@ -89,23 +182,66 @@ async def submit_appeal(
     ``GET /appeal/{appeal_id}``.
     """
     start = time.perf_counter()
-    appeal_id = str(uuid.uuid4())
 
-    appeal = AppealResponse(
-        appeal_id=appeal_id,
+    # Validate detection_id
+    try:
+        detection_uuid = uuid.UUID(detection_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid detection_id format: {detection_id}",
+        )
+
+    # Verify detection exists
+    stmt = select(DetectionResult).where(DetectionResult.id == detection_uuid)
+    row = await session.execute(stmt)
+    detection = row.scalar_one_or_none()
+    if detection is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Detection {detection_id} not found",
+        )
+
+    user_uuid = uuid.UUID(user.user_id) if not isinstance(user.user_id, uuid.UUID) else user.user_id
+
+    # Build material_paths from supporting evidence if provided
+    material_paths = None
+    if body.supporting_evidence:
+        material_paths = {"supporting_evidence": body.supporting_evidence}
+
+    appeal = AppealRecord(
+        detection_id=detection_uuid,
+        user_id=user_uuid,
+        appeal_reason=body.reason,
+        material_paths=material_paths,
+        status=DBAppealStatus.PENDING.value,
+    )
+    session.add(appeal)
+    await session.flush()
+
+    # Audit log
+    audit = AuditLog(
+        user_id=user_uuid,
+        action="submit_appeal",
+        resource_type="appeal",
+        resource_id=str(appeal.id),
+        details={"detection_id": detection_id},
+    )
+    session.add(audit)
+
+    response = AppealResponse(
+        appeal_id=str(appeal.id),
         detection_id=detection_id,
         status=AppealStatus.SUBMITTED,
+        submitted_at=appeal.created_at,
     )
-    _appeals[appeal_id] = appeal
-
-    # TODO: Persist to database and notify reviewers.
 
     elapsed = (time.perf_counter() - start) * 1000
     return APIResponse(
         code=201,
         message="Appeal submitted",
-        data=appeal,
-        meta=Meta(request_id=appeal_id, processing_time_ms=round(elapsed, 2)),
+        data=response,
+        meta=Meta(request_id=str(appeal.id), processing_time_ms=round(elapsed, 2)),
     )
 
 
@@ -117,6 +253,7 @@ async def submit_appeal(
 async def get_appeal_status(
     appeal_id: str,
     user: UserContext = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_async_session),
 ) -> APIResponse[AppealResponse]:
     """Retrieve the current status and resolution of an appeal.
 
@@ -124,14 +261,39 @@ async def get_appeal_status(
     (submitted, under_review, resolved, rejected) and resolution details
     if the appeal has been resolved.
     """
-    appeal = _appeals.get(appeal_id)
+    try:
+        appeal_uuid = uuid.UUID(appeal_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid appeal_id format: {appeal_id}",
+        )
+
+    stmt = select(AppealRecord).where(AppealRecord.id == appeal_uuid)
+    row = await session.execute(stmt)
+    appeal = row.scalar_one_or_none()
+
     if appeal is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Appeal {appeal_id} not found",
         )
+
+    # Map DB status to schema status
+    db_status = DBAppealStatus(appeal.status) if isinstance(appeal.status, str) else appeal.status
+    schema_status = _APPEAL_STATUS_MAP.get(db_status, AppealStatus.SUBMITTED)
+
+    response = AppealResponse(
+        appeal_id=str(appeal.id),
+        detection_id=str(appeal.detection_id),
+        status=schema_status,
+        resolution=appeal.resolution,
+        submitted_at=appeal.created_at,
+        resolved_at=appeal.resolved_at,
+    )
+
     return APIResponse(
-        data=appeal,
+        data=response,
         meta=Meta(request_id=appeal_id),
     )
 
@@ -146,6 +308,7 @@ async def get_appeal_status(
 async def submit_feedback(
     body: FeedbackRequest,
     user: UserContext = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_async_session),
 ) -> APIResponse[FeedbackResponse]:
     """Allow any authenticated user to provide feedback on a detection result.
 
@@ -154,21 +317,64 @@ async def submit_feedback(
     and an optional free-text comment.
     """
     start = time.perf_counter()
-    feedback_id = str(uuid.uuid4())
 
-    fb = FeedbackResponse(
-        feedback_id=feedback_id,
+    # Validate detection_id
+    try:
+        detection_uuid = uuid.UUID(body.detection_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid detection_id format: {body.detection_id}",
+        )
+
+    # Verify detection exists
+    stmt = select(DetectionResult).where(DetectionResult.id == detection_uuid)
+    row = await session.execute(stmt)
+    detection = row.scalar_one_or_none()
+    if detection is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Detection {body.detection_id} not found",
+        )
+
+    user_uuid = uuid.UUID(user.user_id) if not isinstance(user.user_id, uuid.UUID) else user.user_id
+
+    # Map schema rating to DB feedback type
+    feedback_type = _RATING_TO_FEEDBACK_TYPE.get(body.rating.value, FeedbackType.ACCURATE)
+
+    feedback = Feedback(
+        detection_id=detection_uuid,
+        user_id=user_uuid,
+        feedback_type=feedback_type.value,
+        user_comment=body.comment,
+    )
+    session.add(feedback)
+    await session.flush()
+
+    # Audit log
+    audit = AuditLog(
+        user_id=user_uuid,
+        action="submit_feedback",
+        resource_type="feedback",
+        resource_id=str(feedback.id),
+        details={
+            "detection_id": body.detection_id,
+            "rating": body.rating.value,
+        },
+    )
+    session.add(audit)
+
+    response = FeedbackResponse(
+        feedback_id=str(feedback.id),
         detection_id=body.detection_id,
         rating=body.rating,
+        received_at=feedback.created_at,
     )
-    _feedback[feedback_id] = fb
-
-    # TODO: Persist to database and feed into retraining pipeline.
 
     elapsed = (time.perf_counter() - start) * 1000
     return APIResponse(
         code=201,
         message="Feedback received",
-        data=fb,
-        meta=Meta(request_id=feedback_id, processing_time_ms=round(elapsed, 2)),
+        data=response,
+        meta=Meta(request_id=str(feedback.id), processing_time_ms=round(elapsed, 2)),
     )
