@@ -1,0 +1,23 @@
+{
+  "discipline": "社会学",
+  "version": "v1.0",
+  "terms": {
+    "阶层": {"synonyms": ["社会阶层", "阶层结构", "阶层分化", "阶层固化"], "english": "social class"},
+    "流动": {"synonyms": ["社会流动", "代际流动", "阶层流动", "向上流动"], "english": "social mobility"},
+    "互动": {"synonyms": ["社会互动", "符号互动", "微观互动", "人际互动"], "english": "social interaction"},
+    "结构": {"synonyms": ["社会结构", "结构性因素", "结构约束", "权力结构"], "english": "social structure"},
+    "认同": {"synonyms": ["社会认同", "身份认同", "文化认同", "群体认同"], "english": "identity"},
+    "资本": {"synonyms": ["社会资本", "文化资本", "人力资本", "符号资本"], "english": "capital"},
+    "场域": {"synonyms": ["社会场域", "权力场域", "文化场域"], "english": "field"},
+    "惯习": {"synonyms": ["社会惯习", "阶层惯习", "文化惯习"], "english": "habitus"},
+    "规范": {"synonyms": ["社会规范", "行为规范", "制度规范", "文化规范"], "english": "social norm"},
+    "网络": {"synonyms": ["社会网络", "关系网络", "弱关系", "强关系"], "english": "social network"}
+  },
+  "common_replacements": {
+    "影响": ["型塑", "建构", "再生产", "形塑", "制约"],
+    "变化": ["转型", "嬗变", "演化", "变迁", "流变"],
+    "关系": ["互动", "关联", "勾连", "纽带", "联结"],
+    "产生": ["生成", "衍生", "建构", "再造", "催生"],
+    "表现": ["呈现", "展演", "彰显", "体现", "显现"]
+  }
+}

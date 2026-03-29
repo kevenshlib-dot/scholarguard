@@ -1,0 +1,23 @@
+{
+  "discipline": "政治学",
+  "version": "v1.0",
+  "terms": {
+    "权力": {"synonyms": ["权力结构", "权力关系", "权力配置", "权力运作"], "english": "power"},
+    "制度": {"synonyms": ["制度安排", "制度设计", "体制", "制度框架"], "english": "institution"},
+    "治理": {"synonyms": ["治理体系", "治理能力", "国家治理", "社会治理"], "english": "governance"},
+    "民主": {"synonyms": ["民主化", "民主制度", "民主政治", "民主参与"], "english": "democracy"},
+    "合法性": {"synonyms": ["政治合法性", "执政合法性", "合法性基础"], "english": "legitimacy"},
+    "分权": {"synonyms": ["政治分权", "权力分立", "权力制衡", "分权体制"], "english": "decentralization"},
+    "威权": {"synonyms": ["威权体制", "威权政治", "威权治理"], "english": "authoritarianism"},
+    "公共政策": {"synonyms": ["政策制定", "政策执行", "政策评估"], "english": "public policy"},
+    "政治参与": {"synonyms": ["公民参与", "政治动员", "参与式治理"], "english": "political participation"},
+    "国际关系": {"synonyms": ["国际政治", "国际格局", "大国关系"], "english": "international relations"}
+  },
+  "common_replacements": {
+    "影响": ["制约", "塑造", "改组", "重构", "形塑"],
+    "重要": ["关键", "核心", "根本性", "结构性", "决定性"],
+    "表明": ["揭示", "论证", "证实", "指向", "显示"],
+    "认为": ["主张", "指出", "论述", "阐释", "强调"],
+    "研究": ["探析", "考察", "检视", "审视", "剖析"]
+  }
+}
