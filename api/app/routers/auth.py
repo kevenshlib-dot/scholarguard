@@ -172,6 +172,20 @@ async def me(
     session: AsyncSession = Depends(get_async_session),
 ):
     """Return the profile of the currently authenticated user."""
+    # API-key users don't have a DB record — return a synthetic response
+    if current_user.user_id.startswith("apikey:"):
+        from datetime import datetime, timezone
+        from uuid import uuid5, NAMESPACE_DNS
+        synthetic_id = uuid5(NAMESPACE_DNS, current_user.user_id)
+        return UserResponse(
+            id=synthetic_id,
+            username=current_user.user_id,
+            email="",
+            role=current_user.role,
+            is_active=True,
+            created_at=datetime.now(timezone.utc),
+        )
+
     result = await session.execute(
         select(User).where(User.id == current_user.user_id)
     )

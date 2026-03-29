@@ -49,9 +49,9 @@ class SuggestRequest(BaseModel):
         None,
         description="Link to a prior detection result for context",
     )
-    focus: Optional[list[SuggestionType]] = Field(
+    focus: Optional[list[str]] = Field(
         None,
-        description="Limit suggestions to specific types",
+        description="Limit suggestions to specific strategy types",
     )
     language: Optional[str] = Field(None, description="ISO 639-1 language code")
     discipline: Optional[str] = Field(None, description="Academic discipline context")

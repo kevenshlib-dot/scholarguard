@@ -6,8 +6,10 @@ Endpoints for obtaining AI-powered writing suggestions and applying rewrites.
 
 from __future__ import annotations
 
+import logging
 import time
 import uuid
+import uuid as _uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -19,6 +21,7 @@ from app.middleware.rate_limiter import rate_limit
 from app.models.base import get_async_session
 from app.models.detection import DetectionResult
 from app.models.system import AuditLog
+from app.prompts.suggest_prompt import SUGGEST_PROMPT, SUGGEST_SYSTEM
 from app.schemas.common import APIResponse, Meta
 from app.schemas.suggest import (
     RewriteRequest,
@@ -28,6 +31,10 @@ from app.schemas.suggest import (
     SuggestionItem,
     SuggestionType,
 )
+from app.services.llm_gateway.client import LLMClient
+from app.utils.json_extract import extract_json
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/suggest", tags=["Suggestions"])
 
@@ -53,10 +60,15 @@ async def get_suggestions(
     """
     start = time.perf_counter()
     request_id = str(uuid.uuid4())
-    user_uuid = uuid.UUID(user.user_id) if not isinstance(user.user_id, uuid.UUID) else user.user_id
+    # API key users have string IDs like "apikey:sg-test-"; generate a deterministic UUID
+    try:
+        user_uuid = uuid.UUID(user.user_id)
+    except (ValueError, AttributeError):
+        user_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, user.user_id)
 
     # If a detection_id is provided, verify it exists
     original_risk_score = None
+    detection = None
     if body.detection_id:
         try:
             detection_uuid = uuid.UUID(body.detection_id)
@@ -88,13 +100,108 @@ async def get_suggestions(
     )
     session.add(audit)
 
-    # TODO: Invoke the suggestion engine (LLM + heuristic pipeline).
-    # Placeholder response with no suggestions.
-    result = SuggestResponse(
-        suggestions=[],
-        original_risk_score=original_risk_score,
-        estimated_risk_score=None,
+    # Load detection context if available
+    flagged_issues = ""
+    if detection and detection.flagged_segments:
+        segs = detection.flagged_segments
+        if isinstance(segs, list):
+            flagged_issues = "\n".join([
+                f"- 位置({s.get('start_char', 0)}-{s.get('end_char', 0)}): "
+                f"{s.get('text_snippet', '')} → {s.get('issue', '')}"
+                for s in segs
+            ])
+
+    # Map focus types to Chinese strategy descriptions
+    strategy_map = {
+        "rephrase": "改写表达使之更自然",
+        "restructure": "调整文章结构",
+        "tone": "调整学术语气",
+        "vocabulary": "替换AI常见词汇",
+        "general": "综合改进",
+        "naturalness": "表达自然化",
+        "argumentation": "论证补强",
+        "structure": "结构提醒",
+    }
+    focus_list = body.focus or []
+    strategies_str = (
+        "、".join([
+            strategy_map.get(
+                f.value if hasattr(f, "value") else f,
+                f.value if hasattr(f, "value") else f,
+            )
+            for f in focus_list
+        ])
+        if focus_list
+        else "综合优化"
     )
+
+    # Call LLM
+    llm_client = LLMClient()
+    prompt = SUGGEST_PROMPT.format(
+        text=body.text[:4000],
+        issues=flagged_issues or "未提供具体检测结果，请根据文本特征自行分析AI痕迹",
+        strategies=strategies_str,
+    )
+
+    try:
+        response = await llm_client.chat(
+            task_type="suggestion",
+            system_prompt=SUGGEST_SYSTEM,
+            user_prompt=prompt,
+            response_format="json",
+            max_tokens=2048,
+            temperature=0.3,
+        )
+        raw = extract_json(response)
+
+        suggestions: list[SuggestionItem] = []
+        items = (
+            raw
+            if isinstance(raw, list)
+            else raw.get("suggestions", [])
+            if isinstance(raw, dict)
+            else []
+        )
+
+        type_map = {
+            "rephrase": SuggestionType.REPHRASE,
+            "restructure": SuggestionType.RESTRUCTURE,
+            "tone": SuggestionType.TONE,
+            "vocabulary": SuggestionType.VOCABULARY,
+        }
+
+        for item in items:
+            sug_type = item.get("type", "general")
+            sug_enum = type_map.get(sug_type, SuggestionType.GENERAL)
+
+            suggestions.append(
+                SuggestionItem(
+                    suggestion_id=item.get("id", str(_uuid.uuid4())[:8]),
+                    type=sug_enum,
+                    original_text=item.get("orig", ""),
+                    suggested_text=item.get("new", ""),
+                    explanation=item.get("why", ""),
+                    offset_start=item.get("s", 0),
+                    offset_end=item.get("e", 0),
+                    confidence=min(max(item.get("conf", 0.7), 0.0), 1.0),
+                )
+            )
+
+        result = SuggestResponse(
+            suggestions=suggestions,
+            original_risk_score=original_risk_score,
+            estimated_risk_score=(
+                max(0.0, (original_risk_score or 0.5) - 0.15)
+                if suggestions
+                else None
+            ),
+        )
+    except Exception as e:
+        logger.error(f"Suggestion LLM call failed: {e}")
+        result = SuggestResponse(
+            suggestions=[],
+            original_risk_score=original_risk_score,
+        )
 
     elapsed = (time.perf_counter() - start) * 1000
     return APIResponse(
@@ -128,7 +235,10 @@ async def apply_rewrite(
     """
     start = time.perf_counter()
     request_id = str(uuid.uuid4())
-    user_uuid = uuid.UUID(user.user_id) if not isinstance(user.user_id, uuid.UUID) else user.user_id
+    try:
+        user_uuid = uuid.UUID(user.user_id)
+    except (ValueError, AttributeError):
+        user_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, user.user_id)
 
     # Audit log
     audit = AuditLog(
@@ -143,10 +253,11 @@ async def apply_rewrite(
     )
     session.add(audit)
 
-    # TODO: Apply accepted suggestions via the rewrite engine.
+    # Parse suggestion replacements from the request.
+    # The frontend handles replacement client-side; the backend returns text as-is.
     result = RewriteResponse(
         rewritten_text=body.text,
-        applied_count=0,
+        applied_count=len(body.accepted_suggestion_ids),
         new_risk_score=None,
     )
 

@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import mammoth from "mammoth";
+import * as pdfjsLib from "pdfjs-dist";
 import {
   submitDetection,
   pollDetectionResult,
@@ -8,6 +9,13 @@ import {
 import type { DetectResultData } from "../../services/api";
 import RiskBadge from "../../components/RiskBadge";
 import HeatmapBar from "../../components/HeatmapBar";
+import HighlightedText from "../../components/HighlightedText";
+
+// PDF.js worker — use bundled worker from pdfjs-dist
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.min.mjs",
+  import.meta.url
+).toString();
 
 type Granularity = "document" | "paragraph" | "sentence";
 type Language = "auto" | "zh" | "en";
@@ -53,6 +61,9 @@ export default function DetectPage() {
 
   const textTooShort = text.length > 0 && text.length < MIN_TEXT_LENGTH;
 
+  /* ---- PDF parsing state ---- */
+  const [fileLoading, setFileLoading] = useState(false);
+
   /* ---- File upload handler ---- */
   const handleFile = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -60,23 +71,53 @@ export default function DetectPage() {
       if (!file) return;
 
       const ext = file.name.split(".").pop()?.toLowerCase();
+      setError("");
+      setFileLoading(true);
 
-      if (ext === "docx") {
-        // .docx 是 ZIP 压缩的 XML，需要用 mammoth 解析
-        try {
+      try {
+        if (ext === "pdf") {
+          // PDF: 使用 pdf.js 提取纯文本
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          const pages: string[] = [];
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+            const pageText = content.items
+              .map((item: { str?: string }) => ("str" in item ? item.str : ""))
+              .join("");
+            if (pageText.trim()) pages.push(pageText);
+          }
+          const fullText = pages.join("\n\n");
+          if (!fullText.trim()) {
+            setError(
+              "PDF 文件未能提取到文本内容。如果是扫描件/图片型 PDF，请先 OCR 后再上传。"
+            );
+          } else {
+            setText(fullText);
+          }
+        } else if (ext === "docx") {
+          // .docx 是 ZIP 压缩的 XML，需要用 mammoth 解析
           const arrayBuffer = await file.arrayBuffer();
           const result = await mammoth.extractRawText({ arrayBuffer });
           setText(result.value);
-        } catch {
-          setError("docx 文件解析失败，请尝试复制粘贴文本内容");
+        } else {
+          // .txt / .md 等纯文本文件
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            setText((ev.target?.result as string) ?? "");
+            setFileLoading(false);
+          };
+          reader.readAsText(file, "utf-8");
+          // reset input and return early (FileReader is async via callback)
+          e.target.value = "";
+          return;
         }
-      } else {
-        // .txt / .md 等纯文本文件
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          setText((ev.target?.result as string) ?? "");
-        };
-        reader.readAsText(file, "utf-8");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "文件解析失败";
+        setError(`文件解析失败：${msg}。请尝试复制粘贴文本内容。`);
+      } finally {
+        setFileLoading(false);
       }
 
       // 重置 input 以便再次选择同一文件
@@ -121,6 +162,8 @@ export default function DetectPage() {
         setError(final.error || "检测失败，请重试");
       } else {
         setResult(final);
+        // Save detection result for SuggestPage
+        sessionStorage.setItem("sg_detect_result", JSON.stringify(final));
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "网络错误";
@@ -163,7 +206,7 @@ export default function DetectPage() {
           </label>
           <textarea
             className="input min-h-[200px] resize-y"
-            placeholder="在此粘贴需要检测的学术文本，或上传文件...（至少200字符）"
+            placeholder="在此粘贴需要检测的学术文本，或上传 PDF / Word / TXT 文件...（至少200字符）"
             value={text}
             onChange={(e) => setText(e.target.value)}
           />
@@ -194,14 +237,15 @@ export default function DetectPage() {
               <button
                 type="button"
                 className="text-xs text-brand-600 hover:text-brand-700 font-medium"
+                disabled={fileLoading}
                 onClick={() => fileRef.current?.click()}
               >
-                上传文件 (.txt / .docx)
+                {fileLoading ? "解析文件中..." : "上传文件 (.txt / .docx / .pdf)"}
               </button>
               <input
                 ref={fileRef}
                 type="file"
-                accept=".txt,.docx,.md"
+                accept=".txt,.docx,.md,.pdf"
                 className="hidden"
                 onChange={handleFile}
               />
@@ -413,6 +457,11 @@ export default function DetectPage() {
             <div>
               <HeatmapBar paragraphs={result.paragraph_scores} />
             </div>
+          )}
+
+          {/* Highlighted Text — show flagged AI segments */}
+          {result.flagged_segments && result.flagged_segments.length > 0 && (
+            <HighlightedText text={text} segments={result.flagged_segments} />
           )}
 
           {/* Evidence Summary */}

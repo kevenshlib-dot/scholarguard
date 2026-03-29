@@ -42,7 +42,7 @@ def extract_json(text: str) -> Optional[dict]:
             except json.JSONDecodeError:
                 continue
 
-    # 3. 找到第一个 { 和最后一个 } 之间的内容
+    # 3. 找到第一个 { 和最后一个 } 之间的内容（对象）
     first_brace = text.find('{')
     last_brace = text.rfind('}')
     if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
@@ -60,5 +60,20 @@ def extract_json(text: str) -> Optional[dict]:
             except json.JSONDecodeError:
                 pass
 
-    # 4. 全部失败
+    # 4. 找到第一个 [ 和最后一个 ] 之间的内容（数组）
+    first_bracket = text.find('[')
+    last_bracket = text.rfind(']')
+    if first_bracket != -1 and last_bracket != -1 and last_bracket > first_bracket:
+        candidate = text[first_bracket:last_bracket + 1]
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            candidate = re.sub(r'//.*?\n', '\n', candidate)
+            candidate = re.sub(r',\s*([}\]])', r'\1', candidate)
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError:
+                pass
+
+    # 5. 全部失败
     return None

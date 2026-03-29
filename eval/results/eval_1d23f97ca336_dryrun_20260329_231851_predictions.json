@@ -1,0 +1,402 @@
+[
+  {
+    "ground_truth": "human",
+    "risk_score": 0.0631,
+    "discipline": "社会学",
+    "source_type": "human_original",
+    "text_hash": "62ce183c74c21e1862dc73492e57aa4a82a67c52acfc9d8dc4bf774235f068c7",
+    "error": null
+  },
+  {
+    "ground_truth": "human",
+    "risk_score": 0.0718,
+    "discipline": "政治学",
+    "source_type": "human_original",
+    "text_hash": "6bce6219df08f6944fb5f39a69afae7735e2fdbb2b72c836b631af0ca17fea29",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.814,
+    "discipline": "社会学",
+    "source_type": "ai_generated",
+    "text_hash": "965ec91fb6d13e8a45a9ccd51ddc0273e96e7c99a161c4a8935a7d5ea688a251",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.7302,
+    "discipline": "经济学",
+    "source_type": "ai_generated",
+    "text_hash": "ddffb98e66e320d4023107b01a598b9d1410130a83607d730af8367af92b31af",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.9523,
+    "discipline": "政治学",
+    "source_type": "ai_generated",
+    "text_hash": "84a751d2c7136672009c07740310a9efebcd32f6a860987ba4205eaa10fc3ccd",
+    "error": null
+  },
+  {
+    "ground_truth": "human",
+    "risk_score": 0.0595,
+    "discipline": "法学",
+    "source_type": "human_original",
+    "text_hash": "b7f06019e190a28bbb6b1a48823f7a5132c58bee65c30de23d76445ac8952354",
+    "error": null
+  },
+  {
+    "ground_truth": "human",
+    "risk_score": 0.1841,
+    "discipline": "社会学",
+    "source_type": "human_original",
+    "text_hash": "870bcf7aa131fa163051c5dfbc4e8a78a35eb548a6a0078e937d33eced5074f4",
+    "error": null
+  },
+  {
+    "ground_truth": "human",
+    "risk_score": 0.133,
+    "discipline": "社会学",
+    "source_type": "human_original",
+    "text_hash": "fa22e8e3dacd96fee9136132e107a84e0bd65a654f6f9dcda79cacdef27edde8",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.7408,
+    "discipline": "经济学",
+    "source_type": "ai_human_edited",
+    "text_hash": "4ab0793bfb72779b6da3dd0676c86c6d6f6be82c3058148f338b0ad504b72945",
+    "error": null
+  },
+  {
+    "ground_truth": "human",
+    "risk_score": 0.0899,
+    "discipline": "政治学",
+    "source_type": "human_original",
+    "text_hash": "1d2d679e790b27cf985100eca9b7264de4bb407c17fcf43303959b6fc5da82e8",
+    "error": null
+  },
+  {
+    "ground_truth": "human",
+    "risk_score": 0.1343,
+    "discipline": "政治学",
+    "source_type": "human_original",
+    "text_hash": "4461487acd067aa92073eed389862ec27af2011d366db925851b420ef4b04136",
+    "error": null
+  },
+  {
+    "ground_truth": "human",
+    "risk_score": 0.1334,
+    "discipline": "社会学",
+    "source_type": "human_original",
+    "text_hash": "540f0e3636b4d24306d532abf3fb42ad03132bc06463ac208cb8c0fdf30cbdfb",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.7686,
+    "discipline": "政治学",
+    "source_type": "ai_generated",
+    "text_hash": "a81eb18078aa6b9e1dc9ea798e56fb48259fc2c43504f8673c0a8273d7ad1a3c",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.7005,
+    "discipline": "政治学",
+    "source_type": "ai_generated",
+    "text_hash": "81aeb610be1f1675302b86a9726cac6d1941220b4c823dda632297a204621f60",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.4745,
+    "discipline": "经济学",
+    "source_type": "humanizer_processed",
+    "text_hash": "7649c5b92814bc4f1d7e3912dbee40af0550861e66f7b39918f69e47dcef9b11",
+    "error": null
+  },
+  {
+    "ground_truth": "human",
+    "risk_score": 0.0719,
+    "discipline": "政治学",
+    "source_type": "human_original",
+    "text_hash": "dc761ff2283c5e0e849cab03ed146289360a5bc59588f3b340a4e602e840c9d5",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.8673,
+    "discipline": "政治学",
+    "source_type": "ai_generated",
+    "text_hash": "1fd74ff1b75e2e395735e06a34256964b3685e640ba9f7826290a943bfd5a256",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.428,
+    "discipline": "经济学",
+    "source_type": "ai_human_edited",
+    "text_hash": "913a523055d6e0e031e8daa7937817cdbe0892370a9a85064e30bd0597500d57",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.7883,
+    "discipline": "政治学",
+    "source_type": "ai_generated",
+    "text_hash": "b3907c09b72d68f78069275b4b666074012b774a23b1fb94284864d1c4de6fa1",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.5793,
+    "discipline": "社会学",
+    "source_type": "ai_human_edited",
+    "text_hash": "6b05d379f7c4c8f7b3ca822cb01da664fe52307ff5b489d94a559fa93119dafe",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.9535,
+    "discipline": "社会学",
+    "source_type": "ai_generated",
+    "text_hash": "7389f854228e6f6511fed983ce6722b9c51d1125ce8289f1537e70488b012f36",
+    "error": null
+  },
+  {
+    "ground_truth": "human",
+    "risk_score": 0.0732,
+    "discipline": "政治学",
+    "source_type": "human_original",
+    "text_hash": "4b74f61fe421313608321244eec8fa0ce8b8d60bb6fdc61594837c4c46fa50ac",
+    "error": null
+  },
+  {
+    "ground_truth": "human",
+    "risk_score": 0.0855,
+    "discipline": "通用",
+    "source_type": "human_original",
+    "text_hash": "4a4e45a60a59288abdb46fa9af4d011f1e7ef206e6b761fcfb62ae266f79afaa",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.9212,
+    "discipline": "法学",
+    "source_type": "ai_generated",
+    "text_hash": "a109a00f0583949799b3f4d221f1bc32b0e95e86da2539d98987f405f611b69d",
+    "error": null
+  },
+  {
+    "ground_truth": "human",
+    "risk_score": 0.0553,
+    "discipline": "法学",
+    "source_type": "human_original",
+    "text_hash": "d5d6f14b76cab11f047115e1a33a9d6ca290e679bd7e9aa992a955cc809d1bf1",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.9551,
+    "discipline": "政治学",
+    "source_type": "ai_generated",
+    "text_hash": "cb72074a2fbd4714d859b23b481a15537012f066d54fe49871f8c9e5690a9321",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.8606,
+    "discipline": "法学",
+    "source_type": "ai_generated",
+    "text_hash": "dcd6a85ec53fcce2be8c88904c3afae4fb06c43ebf9f998da88ac876edd97e3b",
+    "error": null
+  },
+  {
+    "ground_truth": "human",
+    "risk_score": 0.1163,
+    "discipline": "社会学",
+    "source_type": "human_original",
+    "text_hash": "c85cfe7c15cf9b9be958281ef62fdf90274d2744f0bd83bd60ee1681b9262e7f",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.9346,
+    "discipline": "通用",
+    "source_type": "ai_generated",
+    "text_hash": "7a2170079d34f22fded4b58efedcb89d95013e8b3a207302f7af22a58588a170",
+    "error": null
+  },
+  {
+    "ground_truth": "human",
+    "risk_score": 0.2422,
+    "discipline": "社会学",
+    "source_type": "human_original",
+    "text_hash": "54c8ae8273e720c11339e14c7243da720f6075e797b2fbfd64de058faf52ab38",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.7962,
+    "discipline": "通用",
+    "source_type": "ai_generated",
+    "text_hash": "f91320b5cf06facd7612d310c7466bf2b685ca5913bda78aa40fa4d54451a5d4",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.9244,
+    "discipline": "法学",
+    "source_type": "ai_generated",
+    "text_hash": "322d4b1b98c7dacb084388bbf8962117afebccb1344e99c803c13da4ec387191",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.7579,
+    "discipline": "经济学",
+    "source_type": "ai_generated",
+    "text_hash": "2635c102d5d3ca93f42d45ec8bf18e24b4210155380660b9607b535ac5b19a27",
+    "error": null
+  },
+  {
+    "ground_truth": "human",
+    "risk_score": 0.2022,
+    "discipline": "经济学",
+    "source_type": "human_original",
+    "text_hash": "f7bdc7e4a12510d5e4c12f48bcba0b662b3513987c88d5c66a03691ce8f7c198",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.6108,
+    "discipline": "法学",
+    "source_type": "ai_human_edited",
+    "text_hash": "7bf5688aed5bf20f56cd13f811d402cc7915d98018e4cb2ce125e3bc7fc68f7c",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.6237,
+    "discipline": "通用",
+    "source_type": "humanizer_processed",
+    "text_hash": "ab62d33959d4f5cb2e92b2d14b227c0bee3e4a86aacd1b9ca80e35c10309f594",
+    "error": null
+  },
+  {
+    "ground_truth": "human",
+    "risk_score": 0.1288,
+    "discipline": "法学",
+    "source_type": "human_original",
+    "text_hash": "efe14b962c72522916647971036c95739cd3d74a7dbd6526e6d6e599ed9797fb",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.8115,
+    "discipline": "通用",
+    "source_type": "ai_generated",
+    "text_hash": "d8f736ebdc340870c9915c4a8471602dbf400a94885d429dcf7b1f1dddeb6ea6",
+    "error": null
+  },
+  {
+    "ground_truth": "human",
+    "risk_score": 0.2423,
+    "discipline": "社会学",
+    "source_type": "human_original",
+    "text_hash": "a322b94789f11eda4932d6b67496b46a9551b3f437f5cea92c6e91feeab4b6ca",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.8436,
+    "discipline": "社会学",
+    "source_type": "ai_generated",
+    "text_hash": "f7b088bd5eed5a7c82c98456bfb0a8d8403cb1984edada805a3fd045f528b7ec",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.8918,
+    "discipline": "通用",
+    "source_type": "ai_generated",
+    "text_hash": "95ddadd430c52a85f4b5487b0c74a1035209d5fe827a387e7c852cc16e2948c9",
+    "error": null
+  },
+  {
+    "ground_truth": "human",
+    "risk_score": 0.2096,
+    "discipline": "通用",
+    "source_type": "human_original",
+    "text_hash": "8aed368d4d3c532b4a018518d35ba2377e334cd50b5f5ad60db08105e91598bc",
+    "error": null
+  },
+  {
+    "ground_truth": "human",
+    "risk_score": 0.2167,
+    "discipline": "经济学",
+    "source_type": "human_original",
+    "text_hash": "a74cb35ed1b8a0081aa78ca1f6ab88edbb08923cb1ac6ea13facbe9728a6a540",
+    "error": null
+  },
+  {
+    "ground_truth": "human",
+    "risk_score": 0.2725,
+    "discipline": "经济学",
+    "source_type": "human_original",
+    "text_hash": "8f56ebdfd51852c804db7c27b4c5ed9efb224fd8a55ad33fda949a96f168b448",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.8361,
+    "discipline": "政治学",
+    "source_type": "ai_generated",
+    "text_hash": "e70e9c67cc459f5c77dd2482ecd877d5fe395d5bdb3a498705e7abd03e74b5c9",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.8872,
+    "discipline": "社会学",
+    "source_type": "ai_generated",
+    "text_hash": "c61fa5e00bacd6538d2199346183a257efaba3f915b98f121603da69930d4cc2",
+    "error": null
+  },
+  {
+    "ground_truth": "human",
+    "risk_score": 0.1436,
+    "discipline": "社会学",
+    "source_type": "human_original",
+    "text_hash": "2082e1e2708507edda9d4d0c378454136ee6538489aa5ae5c9c4683992205fda",
+    "error": null
+  },
+  {
+    "ground_truth": "human",
+    "risk_score": 0.058,
+    "discipline": "社会学",
+    "source_type": "human_original",
+    "text_hash": "0fdc5de2ba9af85136aed999ca8cae5696e908918fb48f220dc41f30a40ac602",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.7017,
+    "discipline": "法学",
+    "source_type": "ai_human_edited",
+    "text_hash": "4d51709ce058785171c840af205e52e313f5dac382335a7e5d04474a4fe59c09",
+    "error": null
+  },
+  {
+    "ground_truth": "ai",
+    "risk_score": 0.7508,
+    "discipline": "通用",
+    "source_type": "ai_generated",
+    "text_hash": "1f807946683cd4f76ebff6a0ab6bbbc8511fbbe68f9b1a68589a11d025d301bb",
+    "error": null
+  }
+]

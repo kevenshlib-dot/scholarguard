@@ -264,6 +264,28 @@ async def get_detection_result(
     # Only include result when completed
     result = None
     if task_status == TaskStatus.COMPLETED:
+        from app.schemas.detect import FlaggedSegment
+
+        # Extract flagged_segments from DB JSON
+        raw_segs = detection.flagged_segments or []
+        if isinstance(raw_segs, dict):
+            raw_segs = raw_segs.get("segments", raw_segs.get("flagged_segments", []))
+        flagged = [
+            FlaggedSegment(
+                start_char=s.get("start_char", 0),
+                end_char=s.get("end_char", 0),
+                text_snippet=s.get("text_snippet", ""),
+                issue=s.get("issue", ""),
+            )
+            for s in (raw_segs if isinstance(raw_segs, list) else [])
+        ]
+
+        # Extract report fields
+        report = detection.report_content or {}
+        evidence_summary = report.get("risk_summary", "")
+        recs_raw = detection.recommendations or report.get("recommended_actions", [])
+        recommendations = recs_raw if isinstance(recs_raw, list) else []
+
         result = DetectResult(
             detection_id=str(detection.id),
             risk_score=float(detection.risk_score),
@@ -274,6 +296,10 @@ async def get_detection_result(
             formula_version=detection.formula_version or "",
             param_version=detection.param_version or "",
             language=detection.document.language if detection.document else "en",
+            flagged_segments=flagged if flagged else None,
+            evidence_summary=evidence_summary or None,
+            recommendations=recommendations if recommendations else None,
+            uncertainty_notes=detection.uncertainty_notes or None,
             created_at=detection.created_at,
         )
 

@@ -102,6 +102,15 @@ class SegmentResult(BaseModel):
 # ── Responses ───────────────────────────────────────────────────────────
 
 
+class FlaggedSegment(BaseModel):
+    """A text segment flagged as potentially AI-generated."""
+
+    start_char: int = Field(0, description="Start character offset in original text")
+    end_char: int = Field(0, description="End character offset in original text")
+    text_snippet: str = Field("", description="The flagged text snippet")
+    issue: str = Field("", description="Description of why this segment was flagged")
+
+
 class DetectResult(BaseModel):
     """Full detection result for a single document."""
 
@@ -123,6 +132,19 @@ class DetectResult(BaseModel):
     segments: Optional[list[SegmentResult]] = Field(
         None,
         description="Per-segment results (present when granularity != document)",
+    )
+    flagged_segments: Optional[list[FlaggedSegment]] = Field(
+        None,
+        description="Text segments flagged as potentially AI-generated",
+    )
+    evidence_summary: Optional[str] = Field(
+        None, description="Summary of detection evidence"
+    )
+    recommendations: Optional[list[str]] = Field(
+        None, description="Recommended actions"
+    )
+    uncertainty_notes: Optional[str] = Field(
+        None, description="Uncertainty disclaimer"
     )
     created_at: datetime = Field(default_factory=datetime.utcnow)
 

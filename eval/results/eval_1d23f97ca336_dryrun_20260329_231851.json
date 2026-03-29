@@ -1,0 +1,81 @@
+{
+  "eval_id": "eval_1d23f97ca336",
+  "dataset_version": "v1.0",
+  "formula_version": "v1.0",
+  "param_version": "default",
+  "model_version": "dry_run",
+  "prompt_version": "v1.0",
+  "timestamp": 1774797531.45767,
+  "total_samples": 50,
+  "overall": {
+    "precision": 1.0,
+    "recall": 0.9286,
+    "f1": 0.963,
+    "false_positive_rate": 0.0,
+    "false_negative_rate": 0.0714
+  },
+  "by_discipline": {
+    "社会学": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "samples": 14
+    },
+    "政治学": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "samples": 12
+    },
+    "经济学": {
+      "precision": 1.0,
+      "recall": 0.6,
+      "f1": 0.75,
+      "samples": 8
+    },
+    "法学": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "samples": 8
+    },
+    "通用": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "samples": 8
+    }
+  },
+  "by_source_type": {
+    "human_original": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "samples": 22
+    },
+    "ai_generated": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "samples": 21
+    },
+    "ai_human_edited": {
+      "precision": 1.0,
+      "recall": 0.8,
+      "f1": 0.8889,
+      "samples": 5
+    },
+    "humanizer_processed": {
+      "precision": 1.0,
+      "recall": 0.5,
+      "f1": 0.6667,
+      "samples": 2
+    }
+  },
+  "confusion_matrix": {
+    "tp": 26,
+    "fp": 0,
+    "tn": 22,
+    "fn": 2
+  }
+}

@@ -7,11 +7,13 @@ general feedback on detection quality.
 
 from __future__ import annotations
 
+import logging
 import time
 import uuid
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select, desc, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.middleware.auth import UserContext, get_current_active_user, require_role
@@ -39,6 +41,8 @@ from app.schemas.review import (
     ReviewVerdict,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["Review & Appeals"])
 
 # ── Mapping helpers ───────────────────────────────────────────────────────
@@ -63,6 +67,197 @@ _APPEAL_STATUS_MAP = {
     DBAppealStatus.RESOLVED: AppealStatus.RESOLVED,
     DBAppealStatus.DISMISSED: AppealStatus.REJECTED,
 }
+
+
+# ── GET /reviews — list detections pending review ────────────────────────
+
+
+@router.get(
+    "/reviews",
+    response_model=APIResponse,
+    summary="List detection results that need human review",
+)
+async def list_reviews(
+    status_filter: Optional[str] = Query(None, alias="status"),
+    user: UserContext = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_async_session),
+) -> APIResponse:
+    """Return detection results that are flagged for human review.
+
+    High-risk or critical detections, or those where the LLM suggested
+    review, are included.  An optional ``status`` query parameter filters
+    by review status: ``pending`` (not yet reviewed), ``reviewing``, or
+    ``resolved``.
+    """
+    # Build base query: detections with high/critical risk or high review_priority
+    stmt = (
+        select(DetectionResult)
+        .where(DetectionResult.status == "completed")
+        .where(
+            or_(
+                DetectionResult.risk_level.in_(["high", "critical"]),
+                DetectionResult.review_priority > 0.5,
+            )
+        )
+        .order_by(desc(DetectionResult.created_at))
+        .limit(50)
+    )
+
+    rows = await session.execute(stmt)
+    detections = rows.scalars().all()
+
+    # Gather IDs of detections that already have a review record
+    det_ids = [d.id for d in detections]
+    reviewed_ids: set = set()
+    if det_ids:
+        review_stmt = select(ReviewRecord.detection_id).where(
+            ReviewRecord.detection_id.in_(det_ids)
+        )
+        review_rows = await session.execute(review_stmt)
+        reviewed_ids = {r[0] for r in review_rows.all()}
+
+    # Build items, filtering by status if requested
+    items = []
+    for det in detections:
+        has_review = det.id in reviewed_ids
+        if status_filter == "pending" and has_review:
+            continue
+        if status_filter == "resolved" and not has_review:
+            continue
+
+        # Build text preview from flagged segments or report
+        text_preview = ""
+        segs = det.flagged_segments
+        if isinstance(segs, list) and segs:
+            text_preview = segs[0].get("text_snippet", "")[:200]
+        elif isinstance(segs, dict):
+            seg_list = segs.get("segments", segs.get("flagged_segments", []))
+            if seg_list:
+                text_preview = seg_list[0].get("text_snippet", "")[:200]
+        if not text_preview:
+            report = det.report_content or {}
+            text_preview = report.get("risk_summary", "")[:200]
+        if not text_preview:
+            text_preview = det.document.title if det.document else f"Detection {det.id}"
+
+        item_status = "resolved" if has_review else "pending"
+        items.append({
+            "id": str(det.id),
+            "detection_id": str(det.id),
+            "submitted_at": det.created_at.isoformat() if det.created_at else "",
+            "risk_level": det.risk_level,
+            "risk_score": float(det.risk_score),
+            "status": item_status,
+            "text_preview": text_preview,
+        })
+
+    return APIResponse(
+        data={"items": items},
+        meta=Meta(request_id=str(uuid.uuid4())),
+    )
+
+
+# ── POST /reviews/{review_id}/decide — submit review decision ───────────
+
+
+@router.post(
+    "/reviews/{review_id}/decide",
+    response_model=APIResponse,
+    summary="Submit a review decision for a detection",
+)
+async def decide_review(
+    review_id: str,
+    body: dict,
+    user: UserContext = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_async_session),
+) -> APIResponse:
+    """Record a reviewer's decision on a detection result.
+
+    Accepts ``decision`` (maintain/adjust/dismiss) and ``comment``.
+    """
+    start = time.perf_counter()
+
+    try:
+        detection_uuid = uuid.UUID(review_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid review_id format: {review_id}",
+        )
+
+    # Verify detection exists
+    stmt = select(DetectionResult).where(DetectionResult.id == detection_uuid)
+    row = await session.execute(stmt)
+    detection = row.scalar_one_or_none()
+    if detection is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Detection {review_id} not found",
+        )
+
+    try:
+        user_uuid = uuid.UUID(user.user_id)
+    except (ValueError, AttributeError):
+        user_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, user.user_id)
+
+    decision = body.get("decision", "maintain")
+    comment = body.get("comment", "")
+
+    # Map decision to review label
+    label_map = {
+        "maintain": ReviewLabel.MAINTAIN,
+        "adjust": ReviewLabel.ADJUST,
+        "dismiss": ReviewLabel.DISMISS,
+    }
+    review_label = label_map.get(decision, ReviewLabel.MAINTAIN)
+
+    # Determine adjusted risk level
+    adjusted_risk_level = None
+    if decision == "dismiss":
+        adjusted_risk_level = "low"
+    elif decision == "adjust":
+        adjusted_risk_level = "medium"
+
+    review = ReviewRecord(
+        detection_id=detection_uuid,
+        reviewer_id=user_uuid,
+        review_label=review_label.value,
+        review_comment=comment,
+        adjusted_risk_level=adjusted_risk_level,
+    )
+    session.add(review)
+    await session.flush()
+
+    # Update detection conclusion
+    detection.conclusion_type = "human_confirmed"
+    if decision == "dismiss":
+        detection.human_evidence = {
+            "reviewer_id": str(user_uuid),
+            "decision": decision,
+            "comment": comment,
+        }
+
+    # Audit log
+    audit = AuditLog(
+        user_id=user_uuid,
+        action="review_decision",
+        resource_type="review",
+        resource_id=str(review.id),
+        details={
+            "detection_id": review_id,
+            "decision": decision,
+        },
+    )
+    session.add(audit)
+
+    elapsed = (time.perf_counter() - start) * 1000
+    return APIResponse(
+        data={"success": True},
+        meta=Meta(request_id=str(review.id), processing_time_ms=round(elapsed, 2)),
+    )
+
+
+# ── POST /review/{detection_id} — original submit review ────────────────
 
 
 @router.post(

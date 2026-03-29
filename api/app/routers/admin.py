@@ -62,6 +62,26 @@ class ModelRouteConfig(BaseModel):
     )
 
 
+class TaskRouteItem(BaseModel):
+    """Per-task model routing configuration."""
+    primary: str = Field(..., description="Primary model identifier")
+    fallback: Optional[str] = Field(None, description="Fallback model")
+    degradation: Optional[str] = Field(None, description="Degradation model")
+
+
+class FullModelConfig(BaseModel):
+    """Complete model configuration: routes + service URLs + API keys."""
+    routes: dict[str, TaskRouteItem] = Field(
+        ..., description="Per-task model routing"
+    )
+    service_urls: dict[str, str] = Field(
+        default_factory=dict, description="Service URLs (vllm_url, ollama_url)"
+    )
+    api_keys: dict[str, str] = Field(
+        default_factory=dict, description="Provider API keys (openai, anthropic, google)"
+    )
+
+
 class UsageStats(BaseModel):
     """Aggregated usage statistics."""
 
@@ -192,76 +212,260 @@ async def list_models(
     )
 
 
-@router.put(
-    "/models/route",
-    response_model=APIResponse[ModelRouteConfig],
+@router.get(
+    "/models/config",
+    response_model=APIResponse[dict],
     dependencies=[Depends(rate_limit())],
-    summary="Configure model routing",
+    summary="Get full model configuration",
 )
-async def configure_model_routing(
-    body: ModelRouteConfig,
+async def get_model_config(
     user: UserContext = Depends(require_role("admin")),
+    settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_async_session),
-) -> APIResponse[ModelRouteConfig]:
-    """Update which models are used for detection and suggestion tasks.
+) -> APIResponse[dict]:
+    """Return the complete model configuration: routes, service URLs, API keys."""
+    from app.services.llm_gateway.client import DEFAULT_MODEL_ROUTES
 
-    Accepts a primary detection model, a suggestion model, and an optional
-    fallback model.  The configuration takes effect immediately for new
-    requests.
-    """
+    request_id = str(uuid.uuid4())
+
+    # DB overrides
+    stmt = select(ModelConfig).where(ModelConfig.is_active == True)
+    result = await session.execute(stmt)
+    db_configs = {cfg.task_type: cfg for cfg in result.scalars().all()}
+
+    routes = {}
+    for task_type, default_route in DEFAULT_MODEL_ROUTES.items():
+        if task_type in db_configs:
+            cfg = db_configs[task_type]
+            routes[task_type] = {
+                "primary": cfg.primary_model,
+                "fallback": cfg.fallback_model or default_route.get("fallback"),
+                "degradation": cfg.degradation_strategy or default_route.get("degradation"),
+                "source": "database",
+            }
+        else:
+            routes[task_type] = {
+                **default_route,
+                "source": "default",
+            }
+
+    # Mask API keys for display (show last 4 chars)
+    def mask_key(key: str | None) -> str:
+        if not key:
+            return ""
+        if len(key) <= 8:
+            return "****"
+        return "*" * (len(key) - 4) + key[-4:]
+
+    return APIResponse(
+        data={
+            "routes": routes,
+            "service_urls": {
+                "vllm_url": settings.vllm_url or "",
+                "ollama_url": settings.ollama_url,
+            },
+            "api_keys": {
+                "openai": mask_key(settings.openai_api_key),
+                "anthropic": mask_key(settings.anthropic_api_key),
+                "google": mask_key(settings.google_api_key),
+            },
+            "api_keys_set": {
+                "openai": bool(settings.openai_api_key),
+                "anthropic": bool(settings.anthropic_api_key),
+                "google": bool(settings.google_api_key),
+            },
+        },
+        meta=Meta(request_id=request_id),
+    )
+
+
+@router.put(
+    "/models/config",
+    response_model=APIResponse[dict],
+    dependencies=[Depends(rate_limit())],
+    summary="Update full model configuration",
+)
+async def update_model_config(
+    body: FullModelConfig,
+    user: UserContext = Depends(require_role("admin")),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_async_session),
+) -> APIResponse[dict]:
+    """Update model routing for all task types, plus service URLs and API keys."""
     user_uuid = uuid.UUID(user.user_id) if not isinstance(user.user_id, uuid.UUID) else user.user_id
 
-    # Upsert detection model config
-    stmt = select(ModelConfig).where(ModelConfig.task_type == "detection")
-    result = await session.execute(stmt)
-    detection_cfg = result.scalar_one_or_none()
+    changed_tasks = []
+    for task_type, route in body.routes.items():
+        stmt = select(ModelConfig).where(ModelConfig.task_type == task_type)
+        result = await session.execute(stmt)
+        cfg = result.scalar_one_or_none()
 
-    if detection_cfg:
-        detection_cfg.primary_model = body.detection_model
-        detection_cfg.fallback_model = body.fallback_model
-        detection_cfg.updated_at = datetime.now(timezone.utc)
-    else:
-        detection_cfg = ModelConfig(
-            task_type="detection",
-            primary_model=body.detection_model,
-            fallback_model=body.fallback_model,
-        )
-        session.add(detection_cfg)
+        if cfg:
+            cfg.primary_model = route.primary
+            cfg.fallback_model = route.fallback
+            cfg.degradation_strategy = route.degradation
+            cfg.is_active = True
+            cfg.updated_at = datetime.now(timezone.utc)
+        else:
+            cfg = ModelConfig(
+                task_type=task_type,
+                primary_model=route.primary,
+                fallback_model=route.fallback,
+                degradation_strategy=route.degradation,
+            )
+            session.add(cfg)
+        changed_tasks.append(task_type)
 
-    # Upsert suggestion model config
-    stmt = select(ModelConfig).where(ModelConfig.task_type == "suggestion")
-    result = await session.execute(stmt)
-    suggestion_cfg = result.scalar_one_or_none()
+    # Update service URLs in settings (runtime only; .env must be updated manually)
+    if body.service_urls.get("vllm_url"):
+        settings.vllm_url = body.service_urls["vllm_url"]
+    if body.service_urls.get("ollama_url"):
+        settings.ollama_url = body.service_urls["ollama_url"]
 
-    if suggestion_cfg:
-        suggestion_cfg.primary_model = body.suggestion_model
-        suggestion_cfg.updated_at = datetime.now(timezone.utc)
-    else:
-        suggestion_cfg = ModelConfig(
-            task_type="suggestion",
-            primary_model=body.suggestion_model,
-        )
-        session.add(suggestion_cfg)
+    # Update API keys (runtime only; skip masked/empty values)
+    for provider, key_value in body.api_keys.items():
+        if not key_value or "****" in key_value:
+            continue  # Skip masked or empty values
+        if provider == "openai":
+            settings.openai_api_key = key_value
+        elif provider == "anthropic":
+            settings.anthropic_api_key = key_value
+        elif provider == "google":
+            settings.google_api_key = key_value
 
     # Audit log
     audit = AuditLog(
         user_id=user_uuid,
-        action="configure_model_routing",
+        action="update_model_config",
         resource_type="model_config",
-        resource_id="routing",
+        resource_id="full",
         details={
-            "detection_model": body.detection_model,
-            "suggestion_model": body.suggestion_model,
-            "fallback_model": body.fallback_model,
+            "changed_tasks": changed_tasks,
+            "service_urls_updated": list(body.service_urls.keys()),
+            "api_keys_updated": [k for k, v in body.api_keys.items() if v and "****" not in v],
         },
     )
     session.add(audit)
 
     request_id = str(uuid.uuid4())
     return APIResponse(
-        data=body,
+        data={"success": True, "updated_tasks": changed_tasks},
         meta=Meta(request_id=request_id),
     )
+
+
+class ModelTestRequest(BaseModel):
+    """Request to test a model connection."""
+    model: str = Field(..., description="Model identifier to test")
+    api_key: Optional[str] = Field(None, description="API key (for remote models)")
+    service_url: Optional[str] = Field(None, description="Custom service URL (for vLLM/Ollama)")
+
+
+@router.post(
+    "/models/test",
+    response_model=APIResponse[dict],
+    dependencies=[Depends(rate_limit())],
+    summary="Test model connectivity",
+)
+async def test_model_connection(
+    body: ModelTestRequest,
+    user: UserContext = Depends(require_role("admin")),
+    settings: Settings = Depends(get_settings),
+) -> APIResponse[dict]:
+    """Send a minimal request to the model to verify connectivity."""
+    import asyncio
+    request_id = str(uuid.uuid4())
+    model = body.model.strip()
+    if not model:
+        return APIResponse(
+            data={"success": False, "error": "模型标识不能为空", "latency_ms": 0},
+            meta=Meta(request_id=request_id),
+        )
+
+    try:
+        import litellm
+        start = time.time()
+
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "messages": [{"role": "user", "content": "Hello, respond with OK."}],
+            "max_tokens": 16,
+            "temperature": 0,
+            "timeout": 15,
+        }
+
+        # Determine service URL
+        if model.startswith("openai/"):
+            url = body.service_url or settings.vllm_url or "http://192.168.31.18:8001/v1"
+            kwargs["api_base"] = url
+            kwargs["api_key"] = "not-needed"
+            kwargs["extra_body"] = {"chat_template_kwargs": {"enable_thinking": False}}
+        elif model.startswith("ollama/"):
+            url = body.service_url or settings.ollama_url
+            kwargs["api_base"] = url
+
+        # API key handling for remote models
+        if body.api_key and "****" not in body.api_key:
+            api_key = body.api_key
+        else:
+            # Use stored keys
+            api_key = None
+            if model.startswith("gpt-") or (model.startswith("openai/") and not body.service_url):
+                api_key = settings.openai_api_key
+            elif model.startswith("claude-"):
+                api_key = settings.anthropic_api_key
+            elif model.startswith("gemini/"):
+                api_key = settings.google_api_key
+
+        if api_key:
+            if model.startswith("gpt-"):
+                kwargs["api_key"] = api_key
+            elif model.startswith("claude-"):
+                kwargs["api_key"] = api_key
+            elif model.startswith("gemini/"):
+                kwargs["api_key"] = api_key
+
+        response = await asyncio.wait_for(
+            litellm.acompletion(**kwargs),
+            timeout=20,
+        )
+
+        latency_ms = int((time.time() - start) * 1000)
+        content = response.choices[0].message.content or ""
+
+        return APIResponse(
+            data={
+                "success": True,
+                "latency_ms": latency_ms,
+                "response_preview": content[:100],
+                "model": model,
+            },
+            meta=Meta(request_id=request_id),
+        )
+
+    except asyncio.TimeoutError:
+        return APIResponse(
+            data={"success": False, "error": "连接超时（20秒）", "latency_ms": 20000, "model": model},
+            meta=Meta(request_id=request_id),
+        )
+    except Exception as e:
+        error_msg = str(e)
+        # Simplify common errors
+        if "Connection refused" in error_msg or "ConnectError" in error_msg:
+            error_msg = "无法连接到服务，请检查服务地址是否正确"
+        elif "AuthenticationError" in error_msg or "401" in error_msg:
+            error_msg = "API Key 无效或已过期"
+        elif "invalid_api_key" in error_msg:
+            error_msg = "API Key 格式错误"
+        elif "404" in error_msg:
+            error_msg = f"模型 {model} 不存在或未加载"
+        elif len(error_msg) > 200:
+            error_msg = error_msg[:200] + "..."
+
+        return APIResponse(
+            data={"success": False, "error": error_msg, "latency_ms": 0, "model": model},
+            meta=Meta(request_id=request_id),
+        )
 
 
 @router.get(

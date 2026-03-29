@@ -7,7 +7,6 @@ import DetectPage from "./pages/detect/DetectPage";
 import HistoryPage from "./pages/detect/HistoryPage";
 import SuggestPage from "./pages/suggest/SuggestPage";
 import ReviewPage from "./pages/review/ReviewPage";
-import ResearchPage from "./pages/research/ResearchPage";
 import TranslatePage from "./pages/translate/TranslatePage";
 import AdminPage from "./pages/admin/AdminPage";
 import LoginPage from "./pages/auth/LoginPage";
@@ -25,7 +24,6 @@ const allNavItems: NavItem[] = [
   { to: "/detect", label: "AI检测", status: "active", icon: "🔍" },
   { to: "/suggest", label: "写作建议", status: "active", icon: "✍️" },
   { to: "/review", label: "复核中心", status: "active", icon: "📋" },
-  { to: "/research", label: "文献研究", status: "demo", icon: "📚" },
   { to: "/translate", label: "翻译润色", status: "coming", icon: "🌐" },
   { to: "/admin", label: "系统管理", status: "active", icon: "⚙️", adminOnly: true },
 ];
@@ -113,7 +111,6 @@ function AppLayout() {
           <Route path="/detect/history" element={<HistoryPage />} />
           <Route path="/suggest" element={<SuggestPage />} />
           <Route path="/review" element={<ReviewPage />} />
-          <Route path="/research" element={<ResearchPage />} />
           <Route path="/translate" element={<TranslatePage />} />
           <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
         </Routes>

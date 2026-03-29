@@ -77,6 +77,13 @@ export interface ParagraphScore {
   risk_level: string;
 }
 
+export interface FlaggedSegment {
+  start_char: number;
+  end_char: number;
+  text_snippet: string;
+  issue: string;
+}
+
 export interface DetectResultData {
   task_id: string;
   status: "pending" | "processing" | "completed" | "failed";
@@ -86,6 +93,7 @@ export interface DetectResultData {
   statistical_score?: number;
   evidence_completeness?: number;
   paragraph_scores?: ParagraphScore[];
+  flagged_segments?: FlaggedSegment[];
   evidence_summary?: string;
   recommendations?: string[];
   uncertainty_note?: string;
@@ -112,6 +120,23 @@ export interface Suggestion {
 
 export interface SuggestResult {
   suggestions: Suggestion[];
+}
+
+export interface SuggestionItem {
+  suggestion_id: string;
+  type: string;
+  original_text: string;
+  suggested_text: string;
+  explanation: string;
+  offset_start: number;
+  offset_end: number;
+  confidence: number;
+}
+
+export interface SuggestResultData {
+  suggestions: SuggestionItem[];
+  original_risk_score: number | null;
+  estimated_risk_score: number | null;
 }
 
 export interface LiteratureItem {
@@ -149,6 +174,16 @@ export interface AuditLogEntry {
   action: string;
   user: string;
   detail: string;
+}
+
+/** Raw shape returned by the backend */
+interface RawAuditLogEntry {
+  log_id: string;
+  timestamp: string;
+  user_id: string;
+  action: string;
+  resource: string;
+  details: Record<string, unknown> | null;
 }
 
 /* ---------- API functions ---------- */
@@ -196,14 +231,19 @@ export async function getDetectionResult(
     `/detect/${taskId}`
   );
   const raw = data.data;
+  const r = raw.result;
   // Flatten: merge nested result fields to top level
   return {
     task_id: raw.task_id,
     status: raw.status as DetectResultData["status"],
-    risk_score: raw.result?.risk_score,
-    risk_level: raw.result?.risk_level,
-    llm_confidence: raw.result?.llm_confidence,
-    statistical_score: raw.result?.statistical_score,
+    risk_score: r?.risk_score,
+    risk_level: r?.risk_level,
+    llm_confidence: r?.llm_confidence,
+    statistical_score: r?.statistical_score,
+    flagged_segments: (r?.flagged_segments as FlaggedSegment[] | undefined) ?? undefined,
+    evidence_summary: (r?.evidence_summary as string | undefined) ?? undefined,
+    recommendations: (r?.recommendations as string[] | undefined) ?? undefined,
+    uncertainty_note: (r?.uncertainty_notes as string | undefined) ?? undefined,
   };
 }
 
@@ -268,11 +308,17 @@ export async function submitFeedback(
 
 export async function getSuggestions(
   text: string,
-  strategies: string[]
-): Promise<SuggestResult> {
-  const { data } = await client.post<APIResponse<SuggestResult>>("/suggest", {
+  strategies: string[],
+  detectionId?: string,
+  language?: string,
+  discipline?: string
+): Promise<SuggestResultData> {
+  const { data } = await client.post<APIResponse<SuggestResultData>>("/suggest", {
     text,
-    strategies,
+    focus: strategies,
+    detection_id: detectionId || undefined,
+    language: language || undefined,
+    discipline: discipline || undefined,
   });
   return data.data;
 }
@@ -325,23 +371,147 @@ export interface UserInfo {
   organization_name: string | null;
 }
 
+/* ---------- Model Config Types ---------- */
+
+export interface ModelRouteEntry {
+  primary: string;
+  fallback: string | null;
+  degradation: string | null;
+  source?: string;
+}
+
+export interface FullModelConfig {
+  routes: Record<string, ModelRouteEntry>;
+  service_urls: Record<string, string>;
+  api_keys: Record<string, string>;
+  api_keys_set?: Record<string, boolean>;
+}
+
+export interface ModelTestResult {
+  success: boolean;
+  error?: string;
+  latency_ms: number;
+  response_preview?: string;
+  model?: string;
+}
+
 /* ---------- Admin API ---------- */
 
-export async function getFormulaParams(): Promise<FormulaParam[]> {
-  const { data } = await client.get<APIResponse<FormulaParam[]>>(
-    "/admin/formula-params"
+export async function getModelConfig(): Promise<FullModelConfig> {
+  const { data } = await client.get<APIResponse<FullModelConfig>>(
+    "/models/config"
   );
   return data.data;
+}
+
+export async function updateModelConfig(
+  config: FullModelConfig
+): Promise<{ success: boolean }> {
+  const { data } = await client.put<
+    APIResponse<{ success: boolean }>
+  >("/models/config", config);
+  return data.data;
+}
+
+export async function testModelConnection(
+  model: string,
+  apiKey?: string,
+  serviceUrl?: string
+): Promise<ModelTestResult> {
+  const { data } = await client.post<APIResponse<ModelTestResult>>(
+    "/models/test",
+    { model, api_key: apiKey || undefined, service_url: serviceUrl || undefined }
+  );
+  return data.data;
+}
+
+export interface UsageStats {
+  total_detections: number;
+  total_suggestions: number;
+  total_reviews: number;
+  total_appeals: number;
+  detections_today: number;
+  average_processing_ms: number;
+  active_users_24h: number;
+}
+
+export async function getUsageStats(): Promise<UsageStats> {
+  const { data } = await client.get<APIResponse<UsageStats>>("/usage");
+  return data.data;
+}
+
+/** Raw shape from backend formula-params endpoint */
+interface RawFormulaParams {
+  formula_version: string;
+  param_version: string;
+  weights: Record<string, number>;
+  thresholds: Record<string, number>;
+  updated_at?: string;
+  updated_by?: string;
+}
+
+const WEIGHT_LABELS: Record<string, string> = {
+  llm_confidence: "LLM 置信度 (w1)",
+  statistical_score: "统计特征 (w2)",
+  stylistic_score: "风格特征 (w3)",
+};
+
+const THRESHOLD_LABELS: Record<string, string> = {
+  low_max: "低风险上限",
+  medium_max: "中风险上限",
+  high_max: "高风险上限",
+};
+
+export async function getFormulaParams(): Promise<FormulaParam[]> {
+  const { data } = await client.get<APIResponse<RawFormulaParams>>(
+    "/admin/formula-params"
+  );
+  const raw = data.data;
+  const params: FormulaParam[] = [];
+
+  // Convert weights dict to FormulaParam[]
+  for (const [key, value] of Object.entries(raw.weights || {})) {
+    params.push({
+      key: `w_${key}`,
+      label: WEIGHT_LABELS[key] || key,
+      value,
+      min: 0,
+      max: 1,
+      step: 0.05,
+    });
+  }
+  // Convert thresholds dict to FormulaParam[]
+  for (const [key, value] of Object.entries(raw.thresholds || {})) {
+    params.push({
+      key: `t_${key}`,
+      label: THRESHOLD_LABELS[key] || key,
+      value,
+      min: 0,
+      max: 1,
+      step: 0.05,
+    });
+  }
+  return params;
 }
 
 export async function updateFormulaParams(
   params: FormulaParam[]
 ): Promise<{ success: boolean }> {
-  const { data } = await client.post<APIResponse<{ success: boolean }>>(
+  // Convert FormulaParam[] back to { weights, thresholds } for the backend
+  const weights: Record<string, number> = {};
+  const thresholds: Record<string, number> = {};
+  for (const p of params) {
+    if (p.key.startsWith("w_")) {
+      weights[p.key.slice(2)] = p.value;
+    } else if (p.key.startsWith("t_")) {
+      thresholds[p.key.slice(2)] = p.value;
+    }
+  }
+  const { data } = await client.put<APIResponse<RawFormulaParams>>(
     "/admin/formula-params",
-    { params }
+    { weights, thresholds }
   );
-  return data.data;
+  return { success: !!data.data };
 }
 
 export async function getAuditLogs(
@@ -349,11 +519,24 @@ export async function getAuditLogs(
   pageSize = 20
 ): Promise<{ items: AuditLogEntry[]; total: number }> {
   const { data } = await client.get<
-    APIResponse<{ items: AuditLogEntry[]; total: number }>
+    APIResponse<RawAuditLogEntry[]> & { meta?: { total?: number } }
   >("/admin/audit-logs", {
     params: { page, page_size: pageSize },
   });
-  return data.data;
+
+  // Backend returns array in data + total in meta; map field names
+  const rawItems: RawAuditLogEntry[] = Array.isArray(data.data)
+    ? data.data
+    : [];
+  const items: AuditLogEntry[] = rawItems.map((r) => ({
+    id: r.log_id,
+    timestamp: r.timestamp,
+    action: r.action,
+    user: r.user_id,
+    detail: r.resource + (r.details ? ` ${JSON.stringify(r.details)}` : ""),
+  }));
+  const total = (data.meta as Record<string, unknown>)?.total as number ?? items.length;
+  return { items, total };
 }
 
 /* ---------- User Management API ---------- */

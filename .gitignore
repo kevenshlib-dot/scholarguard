@@ -18,3 +18,4 @@ pg_data/
 qdrant_data/
 redis_data/
 minio_data/
+.claude/
