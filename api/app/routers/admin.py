@@ -18,7 +18,7 @@ from sqlalchemy import select, func, update, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
-from app.middleware.auth import UserContext, require_role
+from app.middleware.auth import UserContext, get_current_active_user, require_role
 from app.middleware.rate_limiter import rate_limit
 from app.models.base import get_async_session
 from app.models.detection import DetectionResult
@@ -122,7 +122,7 @@ class FormulaParamsUpdate(BaseModel):
     summary="List available detection models",
 )
 async def list_models(
-    user: UserContext = Depends(require_role("admin")),
+    user: UserContext = Depends(get_current_active_user),
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_async_session),
 ) -> APIResponse[list[ModelInfo]]:
@@ -246,7 +246,7 @@ async def configure_model_routing(
     summary="Get aggregated usage statistics",
 )
 async def get_usage_stats(
-    user: UserContext = Depends(require_role("admin")),
+    user: UserContext = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> APIResponse[UsageStats]:
     """Return aggregated platform usage statistics.
@@ -317,7 +317,7 @@ async def get_usage_stats(
 async def get_audit_logs(
     page: int = 1,
     page_size: int = 20,
-    user: UserContext = Depends(require_role("admin")),
+    user: UserContext = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_async_session),
 ) -> APIResponse[list[AuditLogEntry]]:
     """Return paginated audit log entries.
@@ -375,7 +375,7 @@ async def get_audit_logs(
     summary="Get current formula parameters",
 )
 async def get_formula_params(
-    user: UserContext = Depends(require_role("admin")),
+    user: UserContext = Depends(get_current_active_user),
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_async_session),
 ) -> APIResponse[FormulaParams]:
