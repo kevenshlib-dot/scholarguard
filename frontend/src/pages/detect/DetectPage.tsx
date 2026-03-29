@@ -154,7 +154,7 @@ export default function DetectPage() {
                 textTooShort ? "text-red-500 font-medium" : "text-gray-400"
               }`}
             >
-              {text.length} / {MIN_TEXT_LENGTH} 字符
+              {text.length} / {MIN_TEXT_LENGTH}（最少）字符
               {textTooShort && `（还需 ${MIN_TEXT_LENGTH - text.length} 字符）`}
             </span>
             <div className="flex items-center gap-3">
