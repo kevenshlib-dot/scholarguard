@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   submitDetection,
   pollDetectionResult,
@@ -12,6 +12,7 @@ type Granularity = "document" | "paragraph" | "sentence";
 type Language = "auto" | "zh" | "en";
 
 const MIN_TEXT_LENGTH = 200;
+const STORAGE_KEY = "sg_detect_text";
 
 const disciplines = [
   { value: "general", label: "通用" },
@@ -22,12 +23,17 @@ const disciplines = [
 ];
 
 export default function DetectPage() {
-  /* ---- Input State ---- */
-  const [text, setText] = useState("");
+  /* ---- Input State (restore from sessionStorage) ---- */
+  const [text, setText] = useState(() => sessionStorage.getItem(STORAGE_KEY) || "");
   const [granularity, setGranularity] = useState<Granularity>("paragraph");
   const [language, setLanguage] = useState<Language>("auto");
   const [discipline, setDiscipline] = useState("general");
   const fileRef = useRef<HTMLInputElement>(null);
+
+  /* Persist text to sessionStorage on every change */
+  useEffect(() => {
+    sessionStorage.setItem(STORAGE_KEY, text);
+  }, [text]);
 
   /* ---- Detection State ---- */
   const [loading, setLoading] = useState(false);
@@ -151,20 +157,36 @@ export default function DetectPage() {
               {text.length} / {MIN_TEXT_LENGTH} 字符
               {textTooShort && `（还需 ${MIN_TEXT_LENGTH - text.length} 字符）`}
             </span>
-            <button
-              type="button"
-              className="text-xs text-brand-600 hover:text-brand-700 font-medium"
-              onClick={() => fileRef.current?.click()}
-            >
-              上传文件 (.txt / .docx)
-            </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".txt,.docx,.md"
-              className="hidden"
-              onChange={handleFile}
-            />
+            <div className="flex items-center gap-3">
+              {text.length > 0 && (
+                <button
+                  type="button"
+                  className="text-xs text-red-500 hover:text-red-600 font-medium"
+                  onClick={() => {
+                    setText("");
+                    sessionStorage.removeItem(STORAGE_KEY);
+                    setResult(null);
+                    setError("");
+                  }}
+                >
+                  清空文本
+                </button>
+              )}
+              <button
+                type="button"
+                className="text-xs text-brand-600 hover:text-brand-700 font-medium"
+                onClick={() => fileRef.current?.click()}
+              >
+                上传文件 (.txt / .docx)
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".txt,.docx,.md"
+                className="hidden"
+                onChange={handleFile}
+              />
+            </div>
           </div>
         </div>
 
