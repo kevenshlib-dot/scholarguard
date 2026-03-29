@@ -18,7 +18,7 @@ from sqlalchemy import select, func, update, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
-from app.middleware.auth import UserContext, get_current_active_user, require_role
+from app.middleware.auth import UserContext, require_role
 from app.middleware.rate_limiter import rate_limit
 from app.models.base import get_async_session
 from app.models.detection import DetectionResult
@@ -29,6 +29,7 @@ from app.models.system import (
     ModelConfig,
     UsageStat,
 )
+from app.models.user import Organization, User
 from app.schemas.common import APIResponse, Meta, PaginatedMeta, PaginationParams
 
 router = APIRouter(tags=["Admin"])
@@ -112,6 +113,30 @@ class FormulaParamsUpdate(BaseModel):
     )
 
 
+class UserInfo(BaseModel):
+    """User information for admin user management."""
+
+    id: str
+    username: str
+    email: str
+    role: str
+    is_active: bool
+    created_at: datetime
+    organization_name: Optional[str] = None
+
+
+class UserRoleUpdate(BaseModel):
+    """Request body for updating a user's role."""
+
+    role: str = Field(..., description="New role for the user")
+
+
+class UserStatusUpdate(BaseModel):
+    """Request body for toggling user active status."""
+
+    is_active: bool = Field(..., description="Whether the user is active")
+
+
 # ── Routes ──────────────────────────────────────────────────────────────
 
 
@@ -122,7 +147,7 @@ class FormulaParamsUpdate(BaseModel):
     summary="List available detection models",
 )
 async def list_models(
-    user: UserContext = Depends(get_current_active_user),
+    user: UserContext = Depends(require_role("admin")),
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_async_session),
 ) -> APIResponse[list[ModelInfo]]:
@@ -246,7 +271,7 @@ async def configure_model_routing(
     summary="Get aggregated usage statistics",
 )
 async def get_usage_stats(
-    user: UserContext = Depends(get_current_active_user),
+    user: UserContext = Depends(require_role("admin")),
     session: AsyncSession = Depends(get_async_session),
 ) -> APIResponse[UsageStats]:
     """Return aggregated platform usage statistics.
@@ -317,7 +342,7 @@ async def get_usage_stats(
 async def get_audit_logs(
     page: int = 1,
     page_size: int = 20,
-    user: UserContext = Depends(get_current_active_user),
+    user: UserContext = Depends(require_role("admin")),
     session: AsyncSession = Depends(get_async_session),
 ) -> APIResponse[list[AuditLogEntry]]:
     """Return paginated audit log entries.
@@ -375,7 +400,7 @@ async def get_audit_logs(
     summary="Get current formula parameters",
 )
 async def get_formula_params(
-    user: UserContext = Depends(get_current_active_user),
+    user: UserContext = Depends(require_role("admin")),
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_async_session),
 ) -> APIResponse[FormulaParams]:
@@ -531,4 +556,158 @@ async def update_formula_params(
             formula_version=settings.formula_version,
             param_version=new_version,
         ),
+    )
+
+
+# ── User Management Routes ─────────────────────────────────────────────
+
+
+@router.get(
+    "/admin/users",
+    response_model=APIResponse[list[UserInfo]],
+    dependencies=[Depends(rate_limit())],
+    summary="List all users (admin only)",
+)
+async def list_users(
+    user: UserContext = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_async_session),
+) -> APIResponse[list[UserInfo]]:
+    """Return a list of all registered users with their details."""
+    request_id = str(uuid.uuid4())
+
+    stmt = select(User).order_by(desc(User.created_at))
+    result = await session.execute(stmt)
+    users = result.scalars().all()
+
+    user_list = [
+        UserInfo(
+            id=str(u.id),
+            username=u.username,
+            email=u.email,
+            role=u.role if isinstance(u.role, str) else u.role.value,
+            is_active=u.is_active,
+            created_at=u.created_at,
+            organization_name=u.organization.name if u.organization else None,
+        )
+        for u in users
+    ]
+
+    return APIResponse(
+        data=user_list,
+        meta=Meta(request_id=request_id),
+    )
+
+
+@router.put(
+    "/admin/users/{user_id}/role",
+    response_model=APIResponse[UserInfo],
+    dependencies=[Depends(rate_limit())],
+    summary="Update a user's role (admin only)",
+)
+async def update_user_role(
+    user_id: str,
+    body: UserRoleUpdate,
+    user: UserContext = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_async_session),
+) -> APIResponse[UserInfo]:
+    """Change the role of a specific user."""
+    request_id = str(uuid.uuid4())
+
+    target_uuid = uuid.UUID(user_id)
+    stmt = select(User).where(User.id == target_uuid)
+    result = await session.execute(stmt)
+    target_user = result.scalar_one_or_none()
+
+    if target_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    # Validate the role value
+    valid_roles = {"admin", "super_admin", "org_admin", "detector", "reviewer", "auditor", "api_caller"}
+    if body.role not in valid_roles:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid role '{body.role}'. Must be one of: {sorted(valid_roles)}",
+        )
+
+    target_user.role = body.role
+    await session.flush()
+
+    # Audit log
+    admin_uuid = uuid.UUID(user.user_id) if not isinstance(user.user_id, uuid.UUID) else user.user_id
+    audit = AuditLog(
+        user_id=admin_uuid,
+        action="update_user_role",
+        resource_type="user",
+        resource_id=str(target_user.id),
+        details={"new_role": body.role},
+    )
+    session.add(audit)
+
+    return APIResponse(
+        data=UserInfo(
+            id=str(target_user.id),
+            username=target_user.username,
+            email=target_user.email,
+            role=target_user.role if isinstance(target_user.role, str) else target_user.role.value,
+            is_active=target_user.is_active,
+            created_at=target_user.created_at,
+            organization_name=target_user.organization.name if target_user.organization else None,
+        ),
+        meta=Meta(request_id=request_id),
+    )
+
+
+@router.put(
+    "/admin/users/{user_id}/status",
+    response_model=APIResponse[UserInfo],
+    dependencies=[Depends(rate_limit())],
+    summary="Toggle user active status (admin only)",
+)
+async def update_user_status(
+    user_id: str,
+    user: UserContext = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_async_session),
+) -> APIResponse[UserInfo]:
+    """Toggle the active/inactive status of a specific user."""
+    request_id = str(uuid.uuid4())
+
+    target_uuid = uuid.UUID(user_id)
+    stmt = select(User).where(User.id == target_uuid)
+    result = await session.execute(stmt)
+    target_user = result.scalar_one_or_none()
+
+    if target_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    target_user.is_active = not target_user.is_active
+    await session.flush()
+
+    # Audit log
+    admin_uuid = uuid.UUID(user.user_id) if not isinstance(user.user_id, uuid.UUID) else user.user_id
+    audit = AuditLog(
+        user_id=admin_uuid,
+        action="toggle_user_status",
+        resource_type="user",
+        resource_id=str(target_user.id),
+        details={"is_active": target_user.is_active},
+    )
+    session.add(audit)
+
+    return APIResponse(
+        data=UserInfo(
+            id=str(target_user.id),
+            username=target_user.username,
+            email=target_user.email,
+            role=target_user.role if isinstance(target_user.role, str) else target_user.role.value,
+            is_active=target_user.is_active,
+            created_at=target_user.created_at,
+            organization_name=target_user.organization.name if target_user.organization else None,
+        ),
+        meta=Meta(request_id=request_id),
     )

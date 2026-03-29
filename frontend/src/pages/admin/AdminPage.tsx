@@ -3,10 +3,13 @@ import {
   getFormulaParams,
   updateFormulaParams,
   getAuditLogs,
+  getUsers,
+  updateUserRole,
+  updateUserStatus,
 } from "../../services/api";
-import type { FormulaParam, AuditLogEntry } from "../../services/api";
+import type { FormulaParam, AuditLogEntry, UserInfo } from "../../services/api";
 
-type Tab = "model" | "formula" | "usage" | "audit";
+type Tab = "model" | "formula" | "usage" | "audit" | "users";
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<Tab>("model");
@@ -25,11 +28,17 @@ export default function AdminPage() {
   const [auditTotal, setAuditTotal] = useState(0);
   const [auditPage, setAuditPage] = useState(1);
 
+  /* ---- Users state ---- */
+  const [users, setUsers] = useState<UserInfo[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState("");
+
   const tabs: { key: Tab; label: string }[] = [
     { key: "model", label: "模型配置" },
     { key: "formula", label: "公式参数" },
     { key: "usage", label: "使用量统计" },
     { key: "audit", label: "审计日志" },
+    { key: "users", label: "用户管理" },
   ];
 
   /* ---- Load formula params ---- */
@@ -81,14 +90,60 @@ export default function AdminPage() {
     }
   }, []);
 
+  /* ---- Load users ---- */
+  const loadUsers = useCallback(async () => {
+    setUsersLoading(true);
+    setUsersError("");
+    try {
+      const data = await getUsers();
+      setUsers(data);
+    } catch (err) {
+      setUsersError(
+        err instanceof Error ? err.message : "加载用户列表失败"
+      );
+    } finally {
+      setUsersLoading(false);
+    }
+  }, []);
+
+  /* ---- Handle role change ---- */
+  const handleRoleChange = async (userId: string, newRole: string) => {
+    try {
+      const updated = await updateUserRole(userId, newRole);
+      setUsers((prev) =>
+        prev.map((u) => (u.id === updated.id ? updated : u))
+      );
+    } catch (err) {
+      setUsersError(
+        err instanceof Error ? err.message : "更新角色失败"
+      );
+    }
+  };
+
+  /* ---- Handle status toggle ---- */
+  const handleStatusToggle = async (userId: string) => {
+    try {
+      const updated = await updateUserStatus(userId);
+      setUsers((prev) =>
+        prev.map((u) => (u.id === updated.id ? updated : u))
+      );
+    } catch (err) {
+      setUsersError(
+        err instanceof Error ? err.message : "更新状态失败"
+      );
+    }
+  };
+
   /* ---- Load data when switching tabs ---- */
   useEffect(() => {
     if (activeTab === "formula") {
       loadFormula();
     } else if (activeTab === "audit") {
       loadAuditLogs(auditPage);
+    } else if (activeTab === "users") {
+      loadUsers();
     }
-  }, [activeTab, auditPage, loadFormula, loadAuditLogs]);
+  }, [activeTab, auditPage, loadFormula, loadAuditLogs, loadUsers]);
 
   const handleParamChange = (index: number, value: number) => {
     setFormulaParams((prev) =>
@@ -367,6 +422,122 @@ export default function AdminPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* User Management */}
+      {activeTab === "users" && (
+        <div className="card">
+          <h4 className="font-semibold text-gray-900 mb-4">用户管理</h4>
+
+          {usersLoading && (
+            <p className="text-sm text-gray-500 mb-4">加载中...</p>
+          )}
+
+          {usersError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm mb-4">
+              {usersError}
+            </div>
+          )}
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 text-left">
+                  <th className="pb-2 text-xs font-medium text-gray-500">
+                    用户名
+                  </th>
+                  <th className="pb-2 text-xs font-medium text-gray-500">
+                    邮箱
+                  </th>
+                  <th className="pb-2 text-xs font-medium text-gray-500">
+                    角色
+                  </th>
+                  <th className="pb-2 text-xs font-medium text-gray-500">
+                    状态
+                  </th>
+                  <th className="pb-2 text-xs font-medium text-gray-500">
+                    注册时间
+                  </th>
+                  <th className="pb-2 text-xs font-medium text-gray-500">
+                    操作
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {users.map((u) => (
+                  <tr key={u.id}>
+                    <td className="py-2.5 text-gray-900 font-medium">
+                      {u.username}
+                    </td>
+                    <td className="py-2.5 text-gray-600">{u.email}</td>
+                    <td className="py-2.5">
+                      <span
+                        className={`inline-block px-2 py-0.5 text-xs rounded-full ${
+                          u.role === "admin"
+                            ? "bg-purple-100 text-purple-700"
+                            : u.role === "reviewer"
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-gray-100 text-gray-700"
+                        }`}
+                      >
+                        {u.role}
+                      </span>
+                    </td>
+                    <td className="py-2.5">
+                      <span
+                        className={`inline-block px-2 py-0.5 text-xs rounded-full ${
+                          u.is_active
+                            ? "bg-green-100 text-green-700"
+                            : "bg-red-100 text-red-700"
+                        }`}
+                      >
+                        {u.is_active ? "活跃" : "已禁用"}
+                      </span>
+                    </td>
+                    <td className="py-2.5 text-gray-500 whitespace-nowrap">
+                      {new Date(u.created_at).toLocaleDateString("zh-CN")}
+                    </td>
+                    <td className="py-2.5">
+                      <div className="flex items-center gap-2">
+                        <select
+                          className="text-xs border border-gray-200 rounded px-2 py-1 bg-white"
+                          value={u.role}
+                          onChange={(e) =>
+                            handleRoleChange(u.id, e.target.value)
+                          }
+                        >
+                          <option value="detector">detector</option>
+                          <option value="reviewer">reviewer</option>
+                          <option value="admin">admin</option>
+                        </select>
+                        <button
+                          className={`text-xs px-2 py-1 rounded ${
+                            u.is_active
+                              ? "bg-red-50 text-red-600 hover:bg-red-100"
+                              : "bg-green-50 text-green-600 hover:bg-green-100"
+                          }`}
+                          onClick={() => handleStatusToggle(u.id)}
+                        >
+                          {u.is_active ? "禁用" : "启用"}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {!usersLoading && users.length === 0 && !usersError && (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="py-8 text-center text-gray-400 text-sm"
+                    >
+                      暂无用户数据
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

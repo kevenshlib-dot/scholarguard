@@ -313,6 +313,18 @@ export async function submitReview(
   return data.data;
 }
 
+/* ---------- User Management Types ---------- */
+
+export interface UserInfo {
+  id: string;
+  username: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+  organization_name: string | null;
+}
+
 /* ---------- Admin API ---------- */
 
 export async function getFormulaParams(): Promise<FormulaParam[]> {
@@ -341,6 +353,33 @@ export async function getAuditLogs(
   >("/admin/audit-logs", {
     params: { page, page_size: pageSize },
   });
+  return data.data;
+}
+
+/* ---------- User Management API ---------- */
+
+export async function getUsers(): Promise<UserInfo[]> {
+  const { data } = await client.get<APIResponse<UserInfo[]>>("/admin/users");
+  return data.data;
+}
+
+export async function updateUserRole(
+  userId: string,
+  role: string
+): Promise<UserInfo> {
+  const { data } = await client.put<APIResponse<UserInfo>>(
+    `/admin/users/${userId}/role`,
+    { role }
+  );
+  return data.data;
+}
+
+export async function updateUserStatus(
+  userId: string
+): Promise<UserInfo> {
+  const { data } = await client.put<APIResponse<UserInfo>>(
+    `/admin/users/${userId}/status`
+  );
   return data.data;
 }
 

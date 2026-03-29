@@ -18,7 +18,6 @@ class RegisterRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=150)
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
-    role: str = Field(default="detector", description="User role (default: detector)")
     organization_name: Optional[str] = Field(
         default=None,
         max_length=255,

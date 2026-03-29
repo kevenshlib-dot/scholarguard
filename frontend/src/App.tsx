@@ -1,6 +1,7 @@
 import { Routes, Route, NavLink, Navigate } from "react-router-dom";
-import { AuthProvider } from "./contexts/AuthContext";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
+import AdminRoute from "./components/AdminRoute";
 import UserMenu from "./components/UserMenu";
 import DetectPage from "./pages/detect/DetectPage";
 import HistoryPage from "./pages/detect/HistoryPage";
@@ -17,15 +18,16 @@ interface NavItem {
   label: string;
   status: "active" | "demo" | "coming";
   icon: string;
+  adminOnly?: boolean;
 }
 
-const navItems: NavItem[] = [
+const allNavItems: NavItem[] = [
   { to: "/detect", label: "AI检测", status: "active", icon: "🔍" },
   { to: "/suggest", label: "写作建议", status: "active", icon: "✍️" },
   { to: "/review", label: "复核中心", status: "active", icon: "📋" },
   { to: "/research", label: "文献研究", status: "demo", icon: "📚" },
   { to: "/translate", label: "翻译润色", status: "coming", icon: "🌐" },
-  { to: "/admin", label: "系统管理", status: "active", icon: "⚙️" },
+  { to: "/admin", label: "系统管理", status: "active", icon: "⚙️", adminOnly: true },
 ];
 
 const statusDot: Record<string, string> = {
@@ -41,6 +43,11 @@ const statusLabel: Record<string, string> = {
 };
 
 function AppLayout() {
+  const { user } = useAuth();
+  const navItems = allNavItems.filter(
+    (item) => !item.adminOnly || user?.role === "admin"
+  );
+
   return (
     <div className="flex h-screen">
       {/* Sidebar */}
@@ -108,7 +115,7 @@ function AppLayout() {
           <Route path="/review" element={<ReviewPage />} />
           <Route path="/research" element={<ResearchPage />} />
           <Route path="/translate" element={<TranslatePage />} />
-          <Route path="/admin" element={<AdminPage />} />
+          <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
         </Routes>
       </main>
     </div>

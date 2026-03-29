@@ -94,14 +94,8 @@ async def register(
             detail="A user with this username already exists",
         )
 
-    # Validate role
-    valid_roles = {r.value for r in UserRole}
-    role_value = body.role
-    if role_value not in valid_roles:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Invalid role '{role_value}'. Must be one of: {sorted(valid_roles)}",
-        )
+    # All registered users default to "detector" role regardless of client input
+    role_value = "detector"
 
     # Optionally create an Organization
     organization_id = None
