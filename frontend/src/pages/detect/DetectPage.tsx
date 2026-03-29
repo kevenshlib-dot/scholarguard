@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import mammoth from "mammoth";
 import {
   submitDetection,
   pollDetectionResult,
@@ -54,14 +55,32 @@ export default function DetectPage() {
 
   /* ---- File upload handler ---- */
   const handleFile = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        setText((ev.target?.result as string) ?? "");
-      };
-      reader.readAsText(file);
+
+      const ext = file.name.split(".").pop()?.toLowerCase();
+
+      if (ext === "docx") {
+        // .docx 是 ZIP 压缩的 XML，需要用 mammoth 解析
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const result = await mammoth.extractRawText({ arrayBuffer });
+          setText(result.value);
+        } catch {
+          setError("docx 文件解析失败，请尝试复制粘贴文本内容");
+        }
+      } else {
+        // .txt / .md 等纯文本文件
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          setText((ev.target?.result as string) ?? "");
+        };
+        reader.readAsText(file, "utf-8");
+      }
+
+      // 重置 input 以便再次选择同一文件
+      e.target.value = "";
     },
     []
   );
