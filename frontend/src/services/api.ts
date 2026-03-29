@@ -1,6 +1,7 @@
 import axios from "axios";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
+const TOKEN_KEY = "sg_token";
 
 const client = axios.create({
   baseURL: BASE_URL,
@@ -10,6 +11,41 @@ const client = axios.create({
     "X-API-Key": "sg-test-key-001",
   },
 });
+
+// On init: restore Authorization header from localStorage
+const storedToken = localStorage.getItem(TOKEN_KEY);
+if (storedToken) {
+  client.defaults.headers.common["Authorization"] = `Bearer ${storedToken}`;
+}
+
+// Request interceptor: attach Bearer token to every request
+client.interceptors.request.use((config) => {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (token && config.headers) {
+    config.headers["Authorization"] = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Response interceptor: on 401, clear auth and redirect to /login
+client.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem("sg_user");
+      delete client.defaults.headers.common["Authorization"];
+      // Only redirect if not already on login/register page
+      if (
+        !window.location.pathname.startsWith("/login") &&
+        !window.location.pathname.startsWith("/register")
+      ) {
+        window.location.href = "/login";
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 /* ---------- API Envelope ---------- */
 

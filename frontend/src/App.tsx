@@ -1,4 +1,7 @@
 import { Routes, Route, NavLink, Navigate } from "react-router-dom";
+import { AuthProvider } from "./contexts/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
+import UserMenu from "./components/UserMenu";
 import DetectPage from "./pages/detect/DetectPage";
 import HistoryPage from "./pages/detect/HistoryPage";
 import SuggestPage from "./pages/suggest/SuggestPage";
@@ -6,6 +9,8 @@ import ReviewPage from "./pages/review/ReviewPage";
 import ResearchPage from "./pages/research/ResearchPage";
 import TranslatePage from "./pages/translate/TranslatePage";
 import AdminPage from "./pages/admin/AdminPage";
+import LoginPage from "./pages/auth/LoginPage";
+import RegisterPage from "./pages/auth/RegisterPage";
 
 interface NavItem {
   to: string;
@@ -35,7 +40,7 @@ const statusLabel: Record<string, string> = {
   coming: "即将推出",
 };
 
-export default function App() {
+function AppLayout() {
   return (
     <div className="flex h-screen">
       {/* Sidebar */}
@@ -81,6 +86,11 @@ export default function App() {
           ))}
         </nav>
 
+        {/* User Menu */}
+        <div className="px-3 py-3 border-t border-gray-100">
+          <UserMenu />
+        </div>
+
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-100 text-xs text-gray-400">
           <p>ScholarGuard v1.0</p>
@@ -102,5 +112,27 @@ export default function App() {
         </Routes>
       </main>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <Routes>
+        {/* Public routes — no sidebar */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+
+        {/* Protected routes — with sidebar layout */}
+        <Route
+          path="/*"
+          element={
+            <ProtectedRoute>
+              <AppLayout />
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+    </AuthProvider>
   );
 }
