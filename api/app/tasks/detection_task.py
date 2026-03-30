@@ -106,14 +106,16 @@ async def _run_detection_async(
         # 2. Build engine and run detection ----------------------------------
         # 从数据库读取管理面板配置的模型路由
         model_routes = await _load_model_routes_from_db(session_factory)
+        # 从 Redis 读取管理面板配置的 API Key 和服务地址
+        runtime_keys, runtime_urls = _load_runtime_config_from_redis(settings.redis_url)
 
         llm_client = LLMClient(
-            ollama_url=settings.ollama_url,
-            vllm_url=settings.vllm_url or "http://192.168.31.18:8001/v1",
+            ollama_url=runtime_urls.get("ollama_url", settings.ollama_url),
+            vllm_url=runtime_urls.get("vllm_url", settings.vllm_url or "http://192.168.31.18:8001/v1"),
             model_routes=model_routes,
-            openai_api_key=settings.openai_api_key,
-            anthropic_api_key=settings.anthropic_api_key,
-            google_api_key=settings.google_api_key,
+            openai_api_key=runtime_keys.get("openai") or settings.openai_api_key,
+            anthropic_api_key=runtime_keys.get("anthropic") or settings.anthropic_api_key,
+            google_api_key=runtime_keys.get("google") or settings.google_api_key,
         )
 
         # 初始化Redis客户端用于检测结果缓存
@@ -306,13 +308,14 @@ async def _run_heatmap_async(
         #    We use the preprocessor to get paragraphs from the original text
         #    For now, we can extract from the detection's stored data
         model_routes = await _load_model_routes_from_db(session_factory)
+        runtime_keys, runtime_urls = _load_runtime_config_from_redis(settings.redis_url)
         llm_client = LLMClient(
-            ollama_url=settings.ollama_url,
-            vllm_url=settings.vllm_url or "http://192.168.31.18:8001/v1",
+            ollama_url=runtime_urls.get("ollama_url", settings.ollama_url),
+            vllm_url=runtime_urls.get("vllm_url", settings.vllm_url or "http://192.168.31.18:8001/v1"),
             model_routes=model_routes,
-            openai_api_key=settings.openai_api_key,
-            anthropic_api_key=settings.anthropic_api_key,
-            google_api_key=settings.google_api_key,
+            openai_api_key=runtime_keys.get("openai") or settings.openai_api_key,
+            anthropic_api_key=runtime_keys.get("anthropic") or settings.anthropic_api_key,
+            google_api_key=runtime_keys.get("google") or settings.google_api_key,
         )
         detection_engine = DetectionEngine(llm_client=llm_client)
 
@@ -405,3 +408,37 @@ async def _load_model_routes_from_db(session_factory) -> dict | None:
     except Exception as e:
         logger.warning("加载数据库模型路由失败，使用默认值: %s", e)
         return None
+
+
+# ── Helper: load API keys & URLs from Redis ────────────────────────
+
+
+def _load_runtime_config_from_redis(redis_url: str) -> tuple[dict, dict]:
+    """
+    从 Redis 读取管理面板配置的 API Key 和服务地址。
+    管理面板保存配置时会同步写入 Redis，这样 Celery Worker（独立进程）也能读到。
+
+    Returns:
+        (api_keys_dict, service_urls_dict)
+    """
+    import redis as sync_redis
+
+    keys: dict = {}
+    urls: dict = {}
+    try:
+        r = sync_redis.Redis.from_url(redis_url, decode_responses=True)
+        for provider in ("openai", "anthropic", "google"):
+            val = r.get(f"sg:api_key:{provider}")
+            if val:
+                keys[provider] = val
+        for url_key in ("vllm_url", "ollama_url"):
+            val = r.get(f"sg:service_url:{url_key}")
+            if val:
+                urls[url_key] = val
+        if keys:
+            logger.info("从 Redis 加载 API Key: %s", list(keys.keys()))
+        if urls:
+            logger.info("从 Redis 加载服务地址: %s", urls)
+    except Exception as e:
+        logger.warning("从 Redis 加载运行时配置失败: %s", e)
+    return keys, urls

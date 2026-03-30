@@ -316,13 +316,19 @@ async def update_model_config(
             session.add(cfg)
         changed_tasks.append(task_type)
 
-    # Update service URLs in settings (runtime only; .env must be updated manually)
+    # Update service URLs in settings (runtime + Redis for cross-process)
     if body.service_urls.get("vllm_url"):
         settings.vllm_url = body.service_urls["vllm_url"]
     if body.service_urls.get("ollama_url"):
         settings.ollama_url = body.service_urls["ollama_url"]
 
-    # Update API keys (runtime only; skip masked/empty values)
+    # Update API keys (runtime + Redis for Celery workers)
+    import redis as sync_redis
+    try:
+        _redis = sync_redis.Redis.from_url(settings.redis_url, decode_responses=True)
+    except Exception:
+        _redis = None
+
     for provider, key_value in body.api_keys.items():
         if not key_value or "****" in key_value:
             continue  # Skip masked or empty values
@@ -332,6 +338,22 @@ async def update_model_config(
             settings.anthropic_api_key = key_value
         elif provider == "google":
             settings.google_api_key = key_value
+        # 持久化到 Redis，让 Celery Worker 也能读到
+        if _redis:
+            try:
+                _redis.set(f"sg:api_key:{provider}", key_value)
+            except Exception:
+                pass
+
+    # 同步 service URLs 到 Redis
+    if _redis:
+        try:
+            for url_key in ("vllm_url", "ollama_url"):
+                val = body.service_urls.get(url_key)
+                if val:
+                    _redis.set(f"sg:service_url:{url_key}", val)
+        except Exception:
+            pass
 
     # Audit log
     audit = AuditLog(
