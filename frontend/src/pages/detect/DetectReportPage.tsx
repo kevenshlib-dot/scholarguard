@@ -159,9 +159,9 @@ export default function DetectReportPage() {
 
     setDownloading(true);
     try {
-      // Render the report element to a high-resolution canvas
+      // Render the report element to canvas (1.5x balances clarity vs file size)
       const canvas = await html2canvas(el, {
-        scale: 2, // 2x for crisp text
+        scale: 1.5,
         useCORS: true,
         logging: false,
         backgroundColor: "#ffffff",
@@ -171,21 +171,22 @@ export default function DetectReportPage() {
       const imgWidth = 210; // A4 width in mm
       const pageHeight = 297; // A4 height in mm
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      const imgData = canvas.toDataURL("image/png");
+      // JPEG with 75% quality instead of uncompressed PNG (~10x smaller)
+      const imgData = canvas.toDataURL("image/jpeg", 0.75);
 
       const pdf = new jsPDF("p", "mm", "a4");
       let heightLeft = imgHeight;
       let position = 0;
 
       // First page
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight, undefined, "FAST");
       heightLeft -= pageHeight;
 
       // Additional pages if content overflows
       while (heightLeft > 0) {
         position -= pageHeight;
         pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+        pdf.addImage(imgData, "JPEG", 0, position, imgWidth, imgHeight, undefined, "FAST");
         heightLeft -= pageHeight;
       }
 
