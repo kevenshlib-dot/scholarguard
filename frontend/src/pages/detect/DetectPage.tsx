@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import mammoth from "mammoth";
 import * as pdfjsLib from "pdfjs-dist";
 import {
@@ -32,6 +33,8 @@ const disciplines = [
 ];
 
 export default function DetectPage() {
+  const navigate = useNavigate();
+
   /* ---- Input State (restore from sessionStorage) ---- */
   const [text, setText] = useState(() => sessionStorage.getItem(STORAGE_KEY) || "");
   const [granularity, setGranularity] = useState<Granularity>("paragraph");
@@ -138,6 +141,9 @@ export default function DetectPage() {
     setTaskStatus("submitting");
 
     try {
+      // Save detection parameters for report page
+      sessionStorage.setItem("sg_detect_params", JSON.stringify({ granularity, language, discipline }));
+
       const task = await submitDetection(text, granularity, language, discipline);
       setTaskStatus("pending");
       setProgress("任务已提交，排队等待中...");
@@ -506,6 +512,13 @@ export default function DetectPage() {
 
           {/* Actions */}
           <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
+            <button
+              className="btn-primary flex items-center gap-1.5"
+              onClick={() => navigate("/detect/report")}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+              检测报告
+            </button>
             <button
               className="btn-secondary"
               onClick={() => setFeedbackOpen(!feedbackOpen)}

@@ -13,6 +13,16 @@ const config: Record<string, { bg: string; text: string; label: string }> = {
     text: "text-purple-700",
     label: "极高风险",
   },
+  unknown: {
+    bg: "bg-gray-100",
+    text: "text-gray-500",
+    label: "检测失败",
+  },
+  error: {
+    bg: "bg-gray-100",
+    text: "text-gray-500",
+    label: "检测失败",
+  },
 };
 
 const sizeClasses: Record<string, string> = {

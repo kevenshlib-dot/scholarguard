@@ -5,6 +5,7 @@ import AdminRoute from "./components/AdminRoute";
 import UserMenu from "./components/UserMenu";
 import DetectPage from "./pages/detect/DetectPage";
 import HistoryPage from "./pages/detect/HistoryPage";
+import DetectReportPage from "./pages/detect/DetectReportPage";
 import SuggestPage from "./pages/suggest/SuggestPage";
 import ReviewPage from "./pages/review/ReviewPage";
 import TranslatePage from "./pages/translate/TranslatePage";
@@ -100,6 +101,7 @@ function AppLayout() {
         <div className="px-6 py-4 border-t border-gray-100 text-xs text-gray-400">
           <p>ScholarGuard v1.0</p>
           <p className="mt-0.5">Evidence-Based AI Detection</p>
+          <p className="mt-1 text-gray-500">社会科学智能实验室（AI4SS）</p>
         </div>
       </aside>
 
@@ -109,6 +111,7 @@ function AppLayout() {
           <Route path="/" element={<Navigate to="/detect" replace />} />
           <Route path="/detect" element={<DetectPage />} />
           <Route path="/detect/history" element={<HistoryPage />} />
+          <Route path="/detect/report" element={<DetectReportPage />} />
           <Route path="/suggest" element={<SuggestPage />} />
           <Route path="/review" element={<ReviewPage />} />
           <Route path="/translate" element={<TranslatePage />} />

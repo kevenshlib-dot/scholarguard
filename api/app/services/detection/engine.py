@@ -100,6 +100,7 @@ class DetectionEngine:
         )
         llm_evidence = llm_result["evidence"]
         report = llm_result["report"]
+        llm_failed = llm_result.get("llm_failed", False)
 
         # ===== 4. E2: 统计因子 =====
         stat_evidence = self.stats_calculator.compute(
@@ -110,15 +111,6 @@ class DetectionEngine:
         )
 
         # ===== 5. 证据融合 =====
-        llm_confidence = self._extract_llm_confidence(llm_evidence)
-
-        fusion_result = self.fusion.fuse(
-            llm_confidence=llm_confidence,
-            llm_risk_indicators=llm_evidence,
-            stat_score=stat_evidence.stat_score,
-        )
-
-        # ===== 6. 组装最终结果（无热力图） =====
         processing_time_ms = int((time.time() - start_time) * 1000)
 
         # 热力图改为延迟生成
@@ -127,48 +119,97 @@ class DetectionEngine:
             and len(processed.paragraphs) > 1
         )
 
-        result = {
-            "content_hash": processed.content_hash,
-            "word_count": processed.word_count,
-            "language": processed.language,
-            "granularity": granularity,
-            # 风险评分体系
-            "risk_score": fusion_result.risk_score,
-            "risk_level": fusion_result.risk_level,
-            "llm_confidence": llm_confidence,
-            "stat_score": stat_evidence.stat_score,
-            "evidence_completeness": fusion_result.evidence_completeness,
-            "review_priority": fusion_result.review_priority,
-            "conclusion_type": fusion_result.conclusion_type,
-            # 证据详情
-            "llm_evidence": llm_evidence,
-            "stat_evidence": stat_evidence.to_dict(),
-            "material_evidence": None,   # 一期预留
-            "human_evidence": None,      # 一期预留
-            # 报告
-            "report_content": report,
-            "flagged_segments": llm_evidence.get("flagged_segments", []),
-            "recommendations": report.get("recommended_actions", []),
-            "uncertainty_notes": report.get("uncertainty_disclaimer", ""),
-            # 段落热力图 — 延迟生成
-            "paragraph_heatmap": None,
-            "heatmap_status": "pending" if has_paragraphs else "not_requested",
-            # 版本冻结
-            "formula_version": fusion_result.formula_version,
-            "param_version": fusion_result.param_version,
-            "model_version": self.llm_client.get_current_model("detection"),
-            "formula_params": fusion_result.formula_params_snapshot,
-            # 元数据
-            "processing_time_ms": processing_time_ms,
-            "cache_hit": False,
-        }
+        if llm_failed:
+            # LLM 不可用：所有评分归零，不做融合计算，避免误导
+            logger.warning("LLM 调用失败，所有评分归零")
+            result = {
+                "content_hash": processed.content_hash,
+                "word_count": processed.word_count,
+                "language": processed.language,
+                "granularity": granularity,
+                # 风险评分 — 全部归零
+                "risk_score": 0.0,
+                "risk_level": "unknown",
+                "llm_confidence": 0.0,
+                "stat_score": 0.0,
+                "evidence_completeness": 0,
+                "review_priority": 0.0,
+                "conclusion_type": "error",
+                # 证据详情
+                "llm_evidence": llm_evidence,
+                "stat_evidence": stat_evidence.to_dict(),
+                "material_evidence": None,
+                "human_evidence": None,
+                # 报告
+                "report_content": report,
+                "flagged_segments": [],
+                "recommendations": report.get("recommended_actions", []),
+                "uncertainty_notes": report.get("uncertainty_disclaimer", ""),
+                # 段落热力图 — 不生成
+                "paragraph_heatmap": None,
+                "heatmap_status": "not_requested",
+                # 版本冻结
+                "formula_version": self.fusion.FORMULA_VERSION,
+                "param_version": self.fusion.params.version,
+                "model_version": self.llm_client.get_current_model("detection"),
+                "formula_params": None,
+                # 元数据
+                "processing_time_ms": processing_time_ms,
+                "cache_hit": False,
+            }
+        else:
+            # 正常流程：融合评分
+            llm_confidence = self._extract_llm_confidence(llm_evidence)
+
+            fusion_result = self.fusion.fuse(
+                llm_confidence=llm_confidence,
+                llm_risk_indicators=llm_evidence,
+                stat_score=stat_evidence.stat_score,
+            )
+
+            # ===== 6. 组装最终结果（无热力图） =====
+            result = {
+                "content_hash": processed.content_hash,
+                "word_count": processed.word_count,
+                "language": processed.language,
+                "granularity": granularity,
+                # 风险评分体系
+                "risk_score": fusion_result.risk_score,
+                "risk_level": fusion_result.risk_level,
+                "llm_confidence": llm_confidence,
+                "stat_score": stat_evidence.stat_score,
+                "evidence_completeness": fusion_result.evidence_completeness,
+                "review_priority": fusion_result.review_priority,
+                "conclusion_type": fusion_result.conclusion_type,
+                # 证据详情
+                "llm_evidence": llm_evidence,
+                "stat_evidence": stat_evidence.to_dict(),
+                "material_evidence": None,   # 一期预留
+                "human_evidence": None,      # 一期预留
+                # 报告
+                "report_content": report,
+                "flagged_segments": llm_evidence.get("flagged_segments", []),
+                "recommendations": report.get("recommended_actions", []),
+                "uncertainty_notes": report.get("uncertainty_disclaimer", ""),
+                # 段落热力图 — 延迟生成
+                "paragraph_heatmap": None,
+                "heatmap_status": "pending" if has_paragraphs else "not_requested",
+                # 版本冻结
+                "formula_version": fusion_result.formula_version,
+                "param_version": fusion_result.param_version,
+                "model_version": self.llm_client.get_current_model("detection"),
+                "formula_params": fusion_result.formula_params_snapshot,
+                # 元数据
+                "processing_time_ms": processing_time_ms,
+                "cache_hit": False,
+            }
 
         # ===== 7. 写入缓存 =====
         await self._set_cached_result(processed.content_hash, result)
 
         logger.info(
-            f"检测完成：risk_score={fusion_result.risk_score:.3f}, "
-            f"risk_level={fusion_result.risk_level}, "
+            f"检测完成：risk_score={result['risk_score']:.3f}, "
+            f"risk_level={result['risk_level']}, "
             f"耗时={processing_time_ms}ms"
         )
 
@@ -286,35 +327,40 @@ class DetectionEngine:
         return {"evidence": evidence, "report": report}
 
     def _default_merged_result(self, error_msg: str) -> dict:
-        """LLM调用失败时的保守默认结果"""
+        """LLM调用失败时的降级结果 — 所有评分归零，明确标记异常"""
         return {
+            "llm_failed": True,
             "evidence": {
-                "llm_confidence": 0.5,
-                "risk_level": "medium",
+                "llm_confidence": 0.0,
+                "risk_level": "unknown",
                 "dimension_scores": {
-                    "vocabulary_diversity": 5,
-                    "syntactic_variation": 5,
-                    "argumentation_naturalness": 5,
+                    "vocabulary_diversity": 0,
+                    "syntactic_variation": 0,
+                    "argumentation_naturalness": 0,
                 },
                 "source_classification": {
-                    "human_original": 0.5,
-                    "ai_generated": 0.25,
-                    "ai_human_edited": 0.15,
-                    "humanizer_processed": 0.10,
+                    "human_original": 0.0,
+                    "ai_generated": 0.0,
+                    "ai_human_edited": 0.0,
+                    "humanizer_processed": 0.0,
                 },
                 "pattern_flags": {},
                 "flagged_segments": [],
-                "reasoning": f"LLM评议异常，使用默认保守判断: {error_msg}",
-                "uncertainty_notes": "由于LLM评议过程出现异常，结果不确定性较高，强烈建议人工复核。",
+                "reasoning": f"LLM 模型调用失败，无法进行 AI 内容分析: {error_msg}",
+                "uncertainty_notes": "LLM 模型不可用，检测未能完成，所有评分无效。请检查模型服务后重新检测。",
             },
             "report": {
-                "risk_summary": "检测过程出现异常，无法给出可靠评估。",
+                "risk_summary": "检测未完成：LLM 模型服务不可用，无法给出任何评估结论。",
                 "evidence_for": [],
                 "evidence_against": [],
-                "uncertainty_disclaimer": "LLM评议异常，结论不可靠，建议人工复核。",
-                "recommended_actions": ["建议人工复核检测结果"],
-                "review_suggested": True,
-                "review_reason": f"LLM评议异常: {error_msg}",
+                "uncertainty_disclaimer": "LLM 模型调用失败，本次检测结果无效，请排查模型服务后重新提交检测。",
+                "recommended_actions": [
+                    "检查 LLM 模型服务是否正常运行",
+                    "确认 vLLM/Ollama 服务地址和端口可达",
+                    "待模型服务恢复后重新提交检测",
+                ],
+                "review_suggested": False,
+                "review_reason": f"LLM评议失败: {error_msg}",
             },
         }
 

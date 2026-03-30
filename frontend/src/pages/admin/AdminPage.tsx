@@ -712,7 +712,6 @@ export default function AdminPage() {
                   > = {
                     detection: { label: "AI 检测", icon: "🔍" },
                     suggestion: { label: "写作建议", icon: "✍️" },
-                    research: { label: "文献研究", icon: "📚" },
                     translation: { label: "翻译润色", icon: "🌐" },
                   };
                   const tm = taskMeta[taskType] || {

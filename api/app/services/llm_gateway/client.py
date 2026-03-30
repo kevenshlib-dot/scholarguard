@@ -31,11 +31,6 @@ DEFAULT_MODEL_ROUTES = {
         "fallback": "claude-sonnet-4-20250514",
         "degradation": "ollama/qwen2.5:7b",
     },
-    "research": {
-        "primary": "openai//home/dell/models/Qwen3.5-27B",
-        "fallback": "gemini/gemini-2.5-pro",
-        "degradation": None,
-    },
     "translation": {
         "primary": "openai//home/dell/models/Qwen3.5-27B",
         "fallback": "gpt-4o",
