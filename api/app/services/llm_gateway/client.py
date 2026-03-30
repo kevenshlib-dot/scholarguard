@@ -148,6 +148,9 @@ class LLMClient:
                 elif model.startswith("gemini/"):
                     if self._api_keys.get("google"):
                         kwargs["api_key"] = self._api_keys["google"]
+                    # Gemini 2.5 思考模型：增大 max_tokens 以容纳 thinking + 实际输出
+                    # thinking tokens 也计入 max_tokens，默认 2048 不够
+                    kwargs["max_tokens"] = max(max_tokens, 8192)
                 elif model.startswith("claude-"):
                     if self._api_keys.get("anthropic"):
                         kwargs["api_key"] = self._api_keys["anthropic"]
@@ -155,9 +158,13 @@ class LLMClient:
                     if self._api_keys.get("openai"):
                         kwargs["api_key"] = self._api_keys["openai"]
 
-                # JSON模式 - vLLM/Qwen可能不支持json_object格式
-                if response_format == "json" and not model.startswith("openai/"):
-                    kwargs["response_format"] = {"type": "json_object"}
+                # JSON模式
+                # - vLLM/openai 模型：通过 prompt 要求 JSON（不设 response_format）
+                # - Gemini 思考模型：不设 json_object（可能导致空响应），通过 prompt 要求
+                # - 其他远程模型（GPT、Claude）：设 json_object
+                if response_format == "json":
+                    if not model.startswith("openai/") and not model.startswith("gemini/"):
+                        kwargs["response_format"] = {"type": "json_object"}
 
                 response = await litellm.acompletion(**kwargs)
 
@@ -165,18 +172,27 @@ class LLMClient:
                 msg = response.choices[0].message
                 content = msg.content
 
-                # Qwen3.5 thinking mode: content可能为None或空，
-                # 实际内容在reasoning_content中，需要合并
+                # 思考模型（Qwen3.5/Gemini 2.5）: content可能为None或空，
+                # 实际内容在reasoning_content或其他字段中
                 if not content or content.strip() == "":
+                    # 尝试从 reasoning_content 获取
                     reasoning = getattr(msg, "reasoning_content", None)
                     if reasoning:
                         content = reasoning
-                    elif hasattr(msg, "provider_specific_fields"):
+                    # 尝试从 provider_specific_fields 获取
+                    if not content and hasattr(msg, "provider_specific_fields"):
                         psf = msg.provider_specific_fields or {}
                         content = psf.get("reasoning_content") or psf.get("reasoning") or ""
+                    # 尝试从 model_extra 获取（litellm 某些版本）
+                    if not content and hasattr(msg, "model_extra"):
+                        extra = msg.model_extra or {}
+                        content = extra.get("reasoning_content") or extra.get("thinking") or ""
 
                 if not content:
-                    logger.warning(f"模型 {model} 返回空内容，跳过")
+                    logger.warning(
+                        f"模型 {model} 返回空内容，跳过。"
+                        f"msg attrs: {[a for a in dir(msg) if not a.startswith('_')]}"
+                    )
                     continue
 
                 # 记录使用日志

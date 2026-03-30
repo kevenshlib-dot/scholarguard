@@ -247,7 +247,11 @@ class DetectionEngine:
             )
             raw = extract_json(response)
             if raw is None:
-                logger.warning(f"合并LLM评议JSON提取失败，原始响应前200字: {response[:200]}")
+                logger.warning(
+                    f"合并LLM评议JSON提取失败，响应长度={len(response)}，"
+                    f"前200字: {response[:200]}，"
+                    f"后100字: {response[-100:]}"
+                )
                 raise ValueError("无法从LLM响应中提取JSON")
 
             # 将短字段名映射回标准字段名
