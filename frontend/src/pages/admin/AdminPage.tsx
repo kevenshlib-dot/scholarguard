@@ -727,6 +727,16 @@ export default function AdminPage() {
                     return undefined;
                   };
 
+                  const resolveApiKey = (model: string) => {
+                    if (model.startsWith("gpt-") || model.startsWith("o1") || model.startsWith("o3") || model.startsWith("o4"))
+                      return modelCfg.api_keys.openai || undefined;
+                    if (model.startsWith("claude-"))
+                      return modelCfg.api_keys.anthropic || undefined;
+                    if (model.startsWith("gemini/"))
+                      return modelCfg.api_keys.google || undefined;
+                    return undefined;
+                  };
+
                   return (
                     <div
                       key={taskType}
@@ -759,7 +769,8 @@ export default function AdminPage() {
                               handleTestModel(
                                 `${taskType}.primary`,
                                 m,
-                                resolveServiceUrl(m)
+                                resolveServiceUrl(m),
+                                resolveApiKey(m)
                               )
                             }
                           />
@@ -779,7 +790,8 @@ export default function AdminPage() {
                               handleTestModel(
                                 `${taskType}.fallback`,
                                 m,
-                                resolveServiceUrl(m)
+                                resolveServiceUrl(m),
+                                resolveApiKey(m)
                               )
                             }
                           />
@@ -801,7 +813,8 @@ export default function AdminPage() {
                               handleTestModel(
                                 `${taskType}.degradation`,
                                 m,
-                                resolveServiceUrl(m)
+                                resolveServiceUrl(m),
+                                resolveApiKey(m)
                               )
                             }
                           />

@@ -475,8 +475,13 @@ async def test_model_connection(
         # Simplify common errors
         if "Connection refused" in error_msg or "ConnectError" in error_msg:
             error_msg = "无法连接到服务，请检查服务地址是否正确"
+        elif "RateLimitError" in error_msg or "429" in error_msg or "quota" in error_msg.lower():
+            error_msg = "API 配额超限，请检查账户计费额度或稍后重试"
         elif "AuthenticationError" in error_msg or "401" in error_msg:
-            error_msg = "API Key 无效或已过期"
+            if not api_key:
+                error_msg = "未提供 API Key，请先在上方「远程模型 API」中填写对应的 Key"
+            else:
+                error_msg = "API Key 无效或已过期"
         elif "invalid_api_key" in error_msg:
             error_msg = "API Key 格式错误"
         elif "404" in error_msg:
