@@ -134,6 +134,8 @@ class DetectionEngine:
                 "risk_level": "unknown",
                 "llm_confidence": 0.0,
                 "stat_score": 0.0,
+                "nhpr_score": 0.0,
+                "nhpr_level": "unknown",
                 "evidence_completeness": 0,
                 "review_priority": 0.0,
                 "conclusion_type": "error",
@@ -169,6 +171,10 @@ class DetectionEngine:
                 stat_score=stat_evidence.stat_score,
             )
 
+            # ===== 5.5 NHPR 计算 =====
+            nhpr_score = self._compute_nhpr(llm_evidence, stat_evidence, processed)
+            nhpr_level = self._classify_nhpr_level(nhpr_score)
+
             # ===== 6. 组装最终结果（无热力图） =====
             result = {
                 "content_hash": processed.content_hash,
@@ -180,6 +186,8 @@ class DetectionEngine:
                 "risk_level": fusion_result.risk_level,
                 "llm_confidence": llm_confidence,
                 "stat_score": stat_evidence.stat_score,
+                "nhpr_score": nhpr_score,
+                "nhpr_level": nhpr_level,
                 "evidence_completeness": fusion_result.evidence_completeness,
                 "review_priority": fusion_result.review_priority,
                 "conclusion_type": fusion_result.conclusion_type,
@@ -289,6 +297,7 @@ class DetectionEngine:
         evidence = {
             "llm_confidence": raw.get("conf", raw.get("llm_confidence", 0.5)),
             "risk_level": raw.get("lvl", raw.get("risk_level", "medium")),
+            "nhpr": raw.get("nhpr", None),
             "dimension_scores": {
                 "vocabulary_diversity": dim.get("vd", dim.get("vocabulary_diversity", 5)),
                 "syntactic_variation": dim.get("sv", dim.get("syntactic_variation", 5)),
@@ -311,6 +320,7 @@ class DetectionEngine:
                     "end_char": seg.get("e", seg.get("end_char", 0)),
                     "text_snippet": seg.get("t", seg.get("text_snippet", "")),
                     "issue": seg.get("i", seg.get("issue", "")),
+                    "nh_pattern": seg.get("nh", seg.get("nh_pattern", "")),
                 }
                 for seg in segs
             ],
@@ -339,6 +349,7 @@ class DetectionEngine:
             "evidence": {
                 "llm_confidence": 0.0,
                 "risk_level": "unknown",
+                "nhpr": 0.0,
                 "dimension_scores": {
                     "vocabulary_diversity": 0,
                     "syntactic_variation": 0,
@@ -369,6 +380,66 @@ class DetectionEngine:
                 "review_reason": f"LLM评议失败: {error_msg}",
             },
         }
+
+    def _compute_nhpr(self, llm_evidence: dict, stat_evidence, processed) -> float:
+        """
+        Compute Non-Human Pattern Ratio (NHPR).
+        NHPR measures the proportion of text segments showing statistically
+        significant deviation from human writing patterns.
+        """
+        # Component 1: Flagged segment text coverage (30%)
+        flagged_segs = llm_evidence.get("flagged_segments", [])
+        total_chars = len(processed.full_text)
+        flagged_chars = sum(
+            max(0, seg.get("end_char", 0) - seg.get("start_char", 0))
+            for seg in flagged_segs
+        )
+        seg_coverage = min(1.0, flagged_chars / max(1, total_chars))
+
+        # Component 2: Pattern flags intensity (25%)
+        flags = llm_evidence.get("pattern_flags", {})
+        flag_values = [v for v in flags.values() if isinstance(v, (int, float))]
+        flags_intensity = (sum(flag_values) / (len(flag_values) * 10)) if flag_values else 0.0
+
+        # Component 3: Statistical non-human features (25%)
+        stat_score_val = stat_evidence.stat_score
+
+        # Component 4: Source classification non-human probability (20%)
+        src = llm_evidence.get("source_classification", {})
+        non_human_prob = (
+            src.get("ai_generated", 0.0) +
+            src.get("ai_human_edited", 0.0) * 0.7 +
+            src.get("humanizer_processed", 0.0) * 0.5
+        )
+
+        # LLM's direct NHPR estimate (if available, blend it in)
+        llm_nhpr = llm_evidence.get("nhpr", None)
+
+        computed_nhpr = (
+            0.30 * seg_coverage +
+            0.25 * flags_intensity +
+            0.25 * stat_score_val +
+            0.20 * min(1.0, non_human_prob)
+        )
+
+        # If LLM provided direct NHPR estimate, blend 40% LLM + 60% computed
+        if llm_nhpr is not None and isinstance(llm_nhpr, (int, float)):
+            nhpr = 0.40 * float(llm_nhpr) + 0.60 * computed_nhpr
+        else:
+            nhpr = computed_nhpr
+
+        return max(0.0, min(1.0, nhpr))
+
+    @staticmethod
+    def _classify_nhpr_level(nhpr: float) -> str:
+        if nhpr < 0.20:
+            return "low"
+        elif nhpr < 0.40:
+            return "medium"
+        elif nhpr < 0.60:
+            return "high"
+        else:
+            return "critical"
 
     def _extract_llm_confidence(self, llm_evidence: dict) -> float:
         """从LLM评议结果中提取风险置信度（注意：这里的confidence表示"有多确定文本是AI的"）"""

@@ -92,6 +92,9 @@ export interface DetectResultData {
   llm_confidence?: number;
   statistical_score?: number;
   evidence_completeness?: number;
+  nhpr_score?: number;
+  nhpr_level?: string;
+  ai_similarity_note?: string;
   paragraph_scores?: ParagraphScore[];
   flagged_segments?: FlaggedSegment[];
   evidence_summary?: string;
@@ -246,6 +249,9 @@ export async function getDetectionResult(
     recommendations: (r?.recommendations as string[] | undefined) ?? undefined,
     uncertainty_note: (r?.uncertainty_notes as string | undefined) ?? undefined,
     model_version: (r?.model_version as string | undefined) ?? undefined,
+    nhpr_score: (r?.nhpr_score as number | undefined) ?? undefined,
+    nhpr_level: (r?.nhpr_level as string | undefined) ?? undefined,
+    ai_similarity_note: (r?.ai_similarity_note as string | undefined) ?? undefined,
   };
 }
 

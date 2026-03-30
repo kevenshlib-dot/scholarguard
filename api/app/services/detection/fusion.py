@@ -61,6 +61,8 @@ class FusionResult:
     formula_version: str
     param_version: str
     formula_params_snapshot: dict
+    nhpr_score: float = 0.0
+    nhpr_level: str = "low"
 
     def to_dict(self) -> dict:
         return {
@@ -71,6 +73,8 @@ class FusionResult:
             "conclusion_type": self.conclusion_type,
             "formula_version": self.formula_version,
             "param_version": self.param_version,
+            "nhpr_score": round(self.nhpr_score, 4),
+            "nhpr_level": self.nhpr_level,
         }
 
 

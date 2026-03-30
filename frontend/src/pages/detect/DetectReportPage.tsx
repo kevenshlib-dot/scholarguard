@@ -278,44 +278,58 @@ export default function DetectReportPage() {
           <div style={{ marginBottom: 28 }}>
             <h2 style={{ fontSize: 16, fontWeight: 700, borderLeft: "4px solid #4f46e5", paddingLeft: 12, marginBottom: 16 }}>二、检测结论</h2>
 
-            {/* Risk Banner */}
+            {/* NHPR Primary Banner */}
             <div style={{
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 16,
-              padding: 20, borderRadius: 12, background: rc.bg, marginBottom: 20,
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+              padding: 24, borderRadius: 12, background: "linear-gradient(135deg, #eef2ff 0%, #f5f3ff 100%)",
+              border: "2px solid #c7d2fe", marginBottom: 20,
             }}>
-              <div style={{ fontSize: 22, fontWeight: 800, color: rc.color }}>
-                {riskLabel(result.risk_level)}
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#4338ca", letterSpacing: 1, textTransform: "uppercase" as const }}>
+                主要检测指标 — AI特征占比 (NHPR)
               </div>
-              <div style={{ fontSize: 36, fontWeight: 800, color: rc.color }}>
-                {pct(result.risk_score)}
+              <div style={{ fontSize: 42, fontWeight: 800, color: riskColor(result.nhpr_level ?? result.risk_level).color }}>
+                {pct(result.nhpr_score ?? result.risk_score)}
               </div>
-            </div>
-
-            {/* Metric Cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
-              <div style={{ textAlign: "center", padding: 14, background: "#f9fafb", borderRadius: 8, border: "1px solid #e5e7eb" }}>
-                <div style={{ fontSize: 22, fontWeight: 700 }}>{pct(result.llm_confidence)}</div>
-                <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>LLM 置信度</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: riskColor(result.nhpr_level ?? result.risk_level).color }}>
+                {riskLabel(result.nhpr_level ?? result.risk_level)}
               </div>
-              <div style={{ textAlign: "center", padding: 14, background: "#f9fafb", borderRadius: 8, border: "1px solid #e5e7eb" }}>
-                <div style={{ fontSize: 22, fontWeight: 700 }}>{pct(result.statistical_score)}</div>
-                <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>统计特征分数</div>
-              </div>
-              <div style={{ textAlign: "center", padding: 14, background: "#f9fafb", borderRadius: 8, border: "1px solid #e5e7eb" }}>
-                <div style={{ fontSize: 22, fontWeight: 700 }}>{pct(result.evidence_completeness)}</div>
-                <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>证据完备度</div>
+              <div style={{ fontSize: 12, color: "#6b7280", textAlign: "center", maxWidth: 500 }}>
+                AI特征占比（NHPR）表示文本中检测到具有AI生成特征的片段比例，包括异常平滑的困惑度、过度集中的词元概率分布、高度模板化的句式结构等
               </div>
             </div>
 
-            {/* Evidence Completeness Bar */}
-            {result.evidence_completeness !== undefined && (
-              <div style={{ marginBottom: 8 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#6b7280", marginBottom: 4 }}>
-                  <span>证据完备度</span>
-                  <span>{pct(result.evidence_completeness)}</span>
+            {/* Secondary Reference Indicators */}
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#6b7280", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#9ca3af", display: "inline-block" }}></span>
+                辅助参考指标
+                <span style={{ fontSize: 11, fontWeight: 400, color: "#9ca3af", marginLeft: "auto" }}>仅供参考</span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 }}>
+                <div style={{ textAlign: "center", padding: 14, background: "#f9fafb", borderRadius: 8, border: "1px solid #e5e7eb" }}>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: "#6b7280" }}>{pct(result.risk_score)}</div>
+                  <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>AI相似度（参考）</div>
                 </div>
-                <div style={{ height: 10, background: "#e5e7eb", borderRadius: 5, overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: pct(result.evidence_completeness), borderRadius: 5, background: "#4f46e5" }} />
+                <div style={{ textAlign: "center", padding: 14, background: "#f9fafb", borderRadius: 8, border: "1px solid #e5e7eb" }}>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: "#6b7280" }}>{pct(result.llm_confidence)}</div>
+                  <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>LLM 置信度</div>
+                </div>
+                <div style={{ textAlign: "center", padding: 14, background: "#f9fafb", borderRadius: 8, border: "1px solid #e5e7eb" }}>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: "#6b7280" }}>{pct(result.statistical_score)}</div>
+                  <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>统计特征分数</div>
+                </div>
+              </div>
+              <div style={{ fontSize: 11, color: "#9ca3af", padding: "8px 12px", background: "#f9fafb", borderRadius: 6, lineHeight: 1.6 }}>
+                AI相似度为辅助参考指标，基于大语言模型概率估计，存在固有不确定性，不可作为单一判定依据。NHPR（AI特征占比）为本报告主要检测指标。
+              </div>
+            </div>
+
+            {/* Evidence completeness (compact) */}
+            {result.evidence_completeness !== undefined && (
+              <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#6b7280" }}>
+                <span>证据完备度：{pct(result.evidence_completeness)}</span>
+                <div style={{ flex: 1, height: 6, background: "#e5e7eb", borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: pct(result.evidence_completeness), borderRadius: 3, background: "#4f46e5" }} />
                 </div>
               </div>
             )}

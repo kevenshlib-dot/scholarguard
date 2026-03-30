@@ -118,6 +118,12 @@ class DetectResult(BaseModel):
     detection_id: str = Field(..., description="Unique detection identifier")
     risk_score: float = Field(..., ge=0.0, le=1.0, description="Overall AI-content risk score")
     risk_level: RiskLevel = Field(..., description="Overall risk classification")
+    nhpr_score: float = Field(0.0, ge=0.0, le=1.0, description="Non-Human Pattern Ratio - primary detection indicator")
+    nhpr_level: RiskLevel = Field(RiskLevel.LOW, description="NHPR risk classification")
+    ai_similarity_note: Optional[str] = Field(
+        None,
+        description="Disclaimer about AI similarity being a secondary reference indicator"
+    )
     llm_confidence: float = Field(
         ..., ge=0.0, le=1.0, description="LLM perplexity-based confidence"
     )

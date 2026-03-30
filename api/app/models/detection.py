@@ -9,6 +9,7 @@ from uuid import UUID
 
 from sqlalchemy import (
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     Numeric,
@@ -62,6 +63,16 @@ class DetectionResult(Base):
     )
     review_priority: Mapped[Decimal] = mapped_column(
         Numeric(5, 4), nullable=False
+    )
+
+    # ── NHPR (Non-Human Pattern Ratio) ────────────────────────────────
+    nhpr_score: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True, default=0.0,
+        comment="Non-Human Pattern Ratio score (0-1)"
+    )
+    nhpr_level: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True, default="low",
+        comment="NHPR risk classification: low/medium/high/critical"
     )
 
     # ── conclusion ───────────────────────────────────────────────────

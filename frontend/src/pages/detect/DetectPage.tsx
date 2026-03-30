@@ -403,53 +403,69 @@ export default function DetectPage() {
         <div className="card space-y-6">
           <h3 className="text-lg font-semibold text-gray-900">检测结果</h3>
 
-          {/* Top-level metrics */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-gray-50 rounded-lg p-4 text-center">
-              <p className="text-xs text-gray-500 mb-2">风险等级</p>
-              <RiskBadge level={result.risk_level ?? "low"} size="lg" />
+          {/* PRIMARY INDICATOR: NHPR */}
+          <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+              <h4 className="text-sm font-semibold text-indigo-900">主要检测指标</h4>
             </div>
-            <div className="bg-gray-50 rounded-lg p-4 text-center">
-              <p className="text-xs text-gray-500 mb-2">风险分数</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {result.risk_score !== undefined
-                  ? (result.risk_score * 100).toFixed(1)
-                  : "N/A"}
-                <span className="text-sm font-normal text-gray-400">%</span>
-              </p>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-4 text-center">
-              <p className="text-xs text-gray-500 mb-2">LLM 置信度</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {result.llm_confidence !== undefined
-                  ? (result.llm_confidence * 100).toFixed(1)
-                  : "N/A"}
-                <span className="text-sm font-normal text-gray-400">%</span>
-              </p>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-4 text-center">
-              <p className="text-xs text-gray-500 mb-2">统计特征分数</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {result.statistical_score !== undefined
-                  ? (result.statistical_score * 100).toFixed(1)
-                  : "N/A"}
-                <span className="text-sm font-normal text-gray-400">%</span>
-              </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-3xl font-extrabold text-gray-900">
+                  {result.nhpr_score !== undefined ? (result.nhpr_score * 100).toFixed(1) : "N/A"}
+                  <span className="text-lg font-normal text-gray-400">%</span>
+                </p>
+                <p className="text-sm font-medium text-indigo-700 mt-1">AI特征占比 (NHPR)</p>
+                <p className="text-xs text-gray-500 mt-1">文本中检测到具有AI生成特征的片段比例</p>
+              </div>
+              <div className="text-right">
+                <RiskBadge level={result.nhpr_level ?? result.risk_level ?? "low"} size="lg" />
+              </div>
             </div>
           </div>
 
-          {/* Evidence completeness */}
-          {result.evidence_completeness !== undefined && (
-            <div className="bg-gray-50 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs text-gray-500">证据完备度</p>
-                <p className="text-sm font-semibold text-gray-700">
-                  {(result.evidence_completeness * 100).toFixed(0)}%
+          {/* SECONDARY REFERENCE: AI Similarity & other metrics */}
+          <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-2 h-2 rounded-full bg-gray-400"></div>
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">辅助参考指标</h4>
+              <span className="text-xs text-gray-400 ml-auto">仅供参考</span>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center">
+                <p className="text-xl font-bold text-gray-700">
+                  {result.risk_score !== undefined ? (result.risk_score * 100).toFixed(1) : "N/A"}
+                  <span className="text-xs font-normal text-gray-400">%</span>
                 </p>
+                <p className="text-xs text-gray-500 mt-1">AI相似度（参考）</p>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="text-center">
+                <p className="text-xl font-bold text-gray-700">
+                  {result.llm_confidence !== undefined ? (result.llm_confidence * 100).toFixed(1) : "N/A"}
+                  <span className="text-xs font-normal text-gray-400">%</span>
+                </p>
+                <p className="text-xs text-gray-500 mt-1">LLM 置信度</p>
+              </div>
+              <div className="text-center">
+                <p className="text-xl font-bold text-gray-700">
+                  {result.statistical_score !== undefined ? (result.statistical_score * 100).toFixed(1) : "N/A"}
+                  <span className="text-xs font-normal text-gray-400">%</span>
+                </p>
+                <p className="text-xs text-gray-500 mt-1">统计特征分数</p>
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 mt-3 leading-relaxed">
+              AI相似度为辅助参考指标，基于大语言模型概率估计，存在固有不确定性，不可作为单一判定依据。
+            </p>
+          </div>
+
+          {/* Evidence completeness (compact) */}
+          {result.evidence_completeness !== undefined && (
+            <div className="flex items-center gap-3 text-xs text-gray-500">
+              <span>证据完备度：{(result.evidence_completeness * 100).toFixed(0)}%</span>
+              <div className="flex-1 bg-gray-200 rounded-full h-1.5">
                 <div
-                  className="bg-brand-500 h-2 rounded-full transition-all"
+                  className="bg-brand-500 h-1.5 rounded-full transition-all"
                   style={{
                     width: `${(result.evidence_completeness * 100).toFixed(0)}%`,
                   }}

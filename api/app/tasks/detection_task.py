@@ -159,6 +159,8 @@ async def _run_detection_async(
                     evidence_completeness=result.get("evidence_completeness", 0),
                     review_priority=result.get("review_priority", 0.0),
                     conclusion_type=result.get("conclusion_type", "fused"),
+                    nhpr_score=result.get("nhpr_score", 0.0),
+                    nhpr_level=result.get("nhpr_level", "low"),
                     llm_evidence=result.get("llm_evidence"),
                     stat_evidence=result.get("stat_evidence"),
                     material_evidence=result.get("material_evidence"),
