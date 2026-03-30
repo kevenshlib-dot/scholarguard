@@ -64,6 +64,7 @@ class LLMClient:
         self.vllm_url = vllm_url
         self.model_routes = model_routes or DEFAULT_MODEL_ROUTES
         self._usage_log: list[dict] = []
+        self._last_used_model: dict[str, str] = {}  # task_type → 实际使用的模型
 
         # 保存 API keys（在调用时按模型类型传入，而非设置 litellm 全局变量）
         self._api_keys = {
@@ -73,7 +74,9 @@ class LLMClient:
         }
 
     def get_current_model(self, task_type: str) -> str:
-        """获取任务的当前首选模型"""
+        """获取任务实际使用的模型（优先返回最近一次调用使用的模型）"""
+        if task_type in self._last_used_model:
+            return self._last_used_model[task_type]
         route = self.model_routes.get(task_type, {})
         return route.get("primary", "ollama/qwen2.5:7b")
 
@@ -204,6 +207,9 @@ class LLMClient:
                     output_tokens=usage.completion_tokens if usage else 0,
                     elapsed_ms=elapsed_ms,
                 )
+
+                # 记录实际使用的模型
+                self._last_used_model[task_type] = model
 
                 logger.info(
                     f"LLM调用成功: model={model}, task={task_type}, "
