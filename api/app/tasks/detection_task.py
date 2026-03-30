@@ -104,9 +104,13 @@ async def _run_detection_async(
             await session.commit()
 
         # 2. Build engine and run detection ----------------------------------
+        # 从数据库读取管理面板配置的模型路由
+        model_routes = await _load_model_routes_from_db(session_factory)
+
         llm_client = LLMClient(
             ollama_url=settings.ollama_url,
             vllm_url=settings.vllm_url or "http://192.168.31.18:8001/v1",
+            model_routes=model_routes,
             openai_api_key=settings.openai_api_key,
             anthropic_api_key=settings.anthropic_api_key,
             google_api_key=settings.google_api_key,
@@ -301,9 +305,11 @@ async def _run_heatmap_async(
         # 2. Rebuild paragraphs from the stored llm_evidence or re-preprocess
         #    We use the preprocessor to get paragraphs from the original text
         #    For now, we can extract from the detection's stored data
+        model_routes = await _load_model_routes_from_db(session_factory)
         llm_client = LLMClient(
             ollama_url=settings.ollama_url,
             vllm_url=settings.vllm_url or "http://192.168.31.18:8001/v1",
+            model_routes=model_routes,
             openai_api_key=settings.openai_api_key,
             anthropic_api_key=settings.anthropic_api_key,
             google_api_key=settings.google_api_key,
@@ -357,3 +363,45 @@ async def _run_heatmap_async(
 
     finally:
         await engine.dispose()
+
+
+# ── Helper: load model routes from DB ──────────────────────────────
+
+
+async def _load_model_routes_from_db(session_factory) -> dict | None:
+    """
+    从数据库加载管理面板配置的模型路由。
+    如果数据库中没有配置，返回 None（LLMClient 将使用硬编码默认值）。
+    """
+    from sqlalchemy import select
+    from app.models.system import ModelConfig
+    from app.services.llm_gateway.client import DEFAULT_MODEL_ROUTES
+
+    try:
+        async with session_factory() as session:
+            stmt = select(ModelConfig).where(ModelConfig.is_active == True)
+            result = await session.execute(stmt)
+            db_configs = {cfg.task_type: cfg for cfg in result.scalars().all()}
+
+        if not db_configs:
+            return None  # 没有数据库配置，使用默认值
+
+        # 将数据库配置合并到默认路由中
+        routes = dict(DEFAULT_MODEL_ROUTES)  # 浅拷贝默认值
+        for task_type, cfg in db_configs.items():
+            default = DEFAULT_MODEL_ROUTES.get(task_type, {})
+            routes[task_type] = {
+                "primary": cfg.primary_model,
+                "fallback": cfg.fallback_model or default.get("fallback"),
+                "degradation": cfg.degradation_strategy or default.get("degradation"),
+            }
+
+        logger.info(
+            "从数据库加载模型路由: %s",
+            {k: v.get("primary", "?") for k, v in routes.items()},
+        )
+        return routes
+
+    except Exception as e:
+        logger.warning("加载数据库模型路由失败，使用默认值: %s", e)
+        return None
