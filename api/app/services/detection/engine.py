@@ -383,9 +383,10 @@ class DetectionEngine:
             + source.get("humanizer_processed", 0.1) * 0.5
         )
 
-        # 取两者的加权平均
-        return 0.6 * ai_prob + 0.4 * (1 - direct_confidence) \
+        # 取两者的加权平均，并限制在 [0, 1] 范围内
+        raw = 0.6 * ai_prob + 0.4 * (1 - direct_confidence) \
             if direct_confidence < 0.5 else 0.6 * ai_prob + 0.4 * direct_confidence
+        return max(0.0, min(1.0, raw))
 
     # ── 热力图：延迟生成（独立接口调用） ──────────────────────────────
 
