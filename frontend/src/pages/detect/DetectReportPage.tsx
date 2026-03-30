@@ -248,11 +248,16 @@ export default function DetectReportPage() {
           </div>
 
           {/* ── Report Meta ── */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 24px", fontSize: 13, marginBottom: 28, padding: 16, background: "#f9fafb", borderRadius: 8 }}>
-            <div><span style={{ color: "#6b7280" }}>报告编号：</span><span style={{ fontWeight: 500 }}>{reportId}</span></div>
-            <div><span style={{ color: "#6b7280" }}>生成时间：</span><span style={{ fontWeight: 500 }}>{reportTime}</span></div>
-            <div><span style={{ color: "#6b7280" }}>检测任务ID：</span><span style={{ fontWeight: 500 }}>{result.task_id}</span></div>
-            <div><span style={{ color: "#6b7280" }}>检测状态：</span><span style={{ fontWeight: 500, color: "#15803d" }}>已完成</span></div>
+          <div style={{ fontSize: 13, marginBottom: 28, padding: 16, background: "#f9fafb", borderRadius: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 24px" }}>
+              <div><span style={{ color: "#6b7280" }}>报告编号：</span><span style={{ fontWeight: 500 }}>{reportId}</span></div>
+              <div><span style={{ color: "#6b7280" }}>生成时间：</span><span style={{ fontWeight: 500 }}>{reportTime}</span></div>
+              <div><span style={{ color: "#6b7280" }}>检测任务ID：</span><span style={{ fontWeight: 500 }}>{result.task_id}</span></div>
+              <div><span style={{ color: "#6b7280" }}>检测状态：</span><span style={{ fontWeight: 500, color: "#15803d" }}>已完成</span></div>
+            </div>
+            <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #e5e7eb" }}>
+              <span style={{ color: "#6b7280" }}>检测对象：</span><span style={{ fontWeight: 500 }}>{extractAbstract(text).title}</span>
+            </div>
           </div>
 
           {/* ── Section 1: Detection Environment ── */}
