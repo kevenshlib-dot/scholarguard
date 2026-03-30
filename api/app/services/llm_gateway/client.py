@@ -65,13 +65,12 @@ class LLMClient:
         self.model_routes = model_routes or DEFAULT_MODEL_ROUTES
         self._usage_log: list[dict] = []
 
-        # 设置 LiteLLM API keys
-        if openai_api_key:
-            litellm.openai_key = openai_api_key
-        if anthropic_api_key:
-            litellm.anthropic_key = anthropic_api_key
-        if google_api_key:
-            litellm.google_key = google_api_key
+        # 保存 API keys（在调用时按模型类型传入，而非设置 litellm 全局变量）
+        self._api_keys = {
+            "openai": openai_api_key,
+            "anthropic": anthropic_api_key,
+            "google": google_api_key,
+        }
 
     def get_current_model(self, task_type: str) -> str:
         """获取任务的当前首选模型"""
@@ -134,7 +133,7 @@ class LLMClient:
                     "temperature": temperature,
                 }
 
-                # 本地模型路由：设置api_base
+                # 模型路由：按类型设置 api_base 和 api_key
                 if model.startswith("ollama/"):
                     kwargs["api_base"] = self.ollama_url
                 elif model.startswith("openai/") and self.vllm_url:
@@ -146,9 +145,17 @@ class LLMClient:
                     # vLLM性能优化参数
                     kwargs["top_p"] = 0.9              # 略微缩小采样空间
                     kwargs["repetition_penalty"] = 1.0  # 结构化输出无需重复惩罚
+                elif model.startswith("gemini/"):
+                    if self._api_keys.get("google"):
+                        kwargs["api_key"] = self._api_keys["google"]
+                elif model.startswith("claude-"):
+                    if self._api_keys.get("anthropic"):
+                        kwargs["api_key"] = self._api_keys["anthropic"]
+                elif model.startswith("gpt-") or model.startswith("o1") or model.startswith("o3") or model.startswith("o4"):
+                    if self._api_keys.get("openai"):
+                        kwargs["api_key"] = self._api_keys["openai"]
 
                 # JSON模式 - vLLM/Qwen可能不支持json_object格式
-                # ���用prompt中要求JSON输出
                 if response_format == "json" and not model.startswith("openai/"):
                     kwargs["response_format"] = {"type": "json_object"}
 
