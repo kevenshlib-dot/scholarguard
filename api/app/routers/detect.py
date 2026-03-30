@@ -295,6 +295,7 @@ async def get_detection_result(
             stylistic_score=0.0,
             formula_version=detection.formula_version or "",
             param_version=detection.param_version or "",
+            model_version=detection.model_version or None,
             language=detection.document.language if detection.document else "en",
             flagged_segments=flagged if flagged else None,
             evidence_summary=evidence_summary or None,

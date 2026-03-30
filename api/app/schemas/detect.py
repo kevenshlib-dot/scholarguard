@@ -129,6 +129,7 @@ class DetectResult(BaseModel):
     )
     formula_version: str = Field(..., description="Formula version used")
     param_version: str = Field(..., description="Parameter version used")
+    model_version: Optional[str] = Field(None, description="Actual LLM model used for detection")
     language: str = Field(..., description="Detected or specified language")
     segments: Optional[list[SegmentResult]] = Field(
         None,

@@ -260,7 +260,7 @@ export default function DetectReportPage() {
             <h2 style={{ fontSize: 16, fontWeight: 700, borderLeft: "4px solid #4f46e5", paddingLeft: 12, marginBottom: 16 }}>一、检测环境</h2>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px", fontSize: 13, padding: 16, background: "#f9fafb", borderRadius: 8 }}>
               <div><span style={{ color: "#6b7280" }}>检测平台：</span><span style={{ fontWeight: 500 }}>ScholarGuard v1.0</span></div>
-              <div><span style={{ color: "#6b7280" }}>检测引擎：</span><span style={{ fontWeight: 500 }}>LLM-Center (Qwen3.5-27B)</span></div>
+              <div><span style={{ color: "#6b7280" }}>检测引擎：</span><span style={{ fontWeight: 500 }}>{result.model_version || "LLM-Center"}</span></div>
               <div><span style={{ color: "#6b7280" }}>检测粒度：</span><span style={{ fontWeight: 500 }}>{granularityLabel(params.granularity)}</span></div>
               <div><span style={{ color: "#6b7280" }}>文本语言：</span><span style={{ fontWeight: 500 }}>{languageLabel(params.language)}</span></div>
               <div><span style={{ color: "#6b7280" }}>学科领域：</span><span style={{ fontWeight: 500 }}>{disciplineLabel(params.discipline)}</span></div>

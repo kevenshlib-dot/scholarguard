@@ -97,6 +97,7 @@ export interface DetectResultData {
   evidence_summary?: string;
   recommendations?: string[];
   uncertainty_note?: string;
+  model_version?: string;
   error?: string;
 }
 
@@ -244,6 +245,7 @@ export async function getDetectionResult(
     evidence_summary: (r?.evidence_summary as string | undefined) ?? undefined,
     recommendations: (r?.recommendations as string[] | undefined) ?? undefined,
     uncertainty_note: (r?.uncertainty_notes as string | undefined) ?? undefined,
+    model_version: (r?.model_version as string | undefined) ?? undefined,
   };
 }
 
