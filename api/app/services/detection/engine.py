@@ -83,14 +83,16 @@ class DetectionEngine:
             f"{len(processed.paragraphs)}段，{len(processed.sentences)}句"
         )
 
-        # ===== 2. 缓存检查 =====
-        cached = await self._get_cached_result(processed.content_hash)
+        # ===== 2. 缓存检查（缓存 key 包含模型，模型切换后不命中旧缓存）=====
+        current_model = self.llm_client.get_current_model("detection")
+        cache_key_suffix = f"{processed.content_hash}:{current_model}"
+        cached = await self._get_cached_result(cache_key_suffix)
         if cached is not None:
             cached["processing_time_ms"] = int((time.time() - start_time) * 1000)
             cached["cache_hit"] = True
             logger.info(
-                f"缓存命中：content_hash={processed.content_hash[:16]}...，"
-                f"耗时={cached['processing_time_ms']}ms"
+                f"缓存命中：content_hash={processed.content_hash[:16]}..., "
+                f"model={current_model}，耗时={cached['processing_time_ms']}ms"
             )
             return cached
 
@@ -204,8 +206,8 @@ class DetectionEngine:
                 "cache_hit": False,
             }
 
-        # ===== 7. 写入缓存 =====
-        await self._set_cached_result(processed.content_hash, result)
+        # ===== 7. 写入缓存（key 包含模型，切换模型不命中旧缓存）=====
+        await self._set_cached_result(cache_key_suffix, result)
 
         logger.info(
             f"检测完成：risk_score={result['risk_score']:.3f}, "
