@@ -249,6 +249,34 @@ async def get_model_config(
                 "source": "default",
             }
 
+    # ── 从 Redis 读取持久化的 API Key 和服务地址（优先于 settings 内存） ──
+    import redis as sync_redis
+    redis_keys: dict[str, str] = {}
+    redis_urls: dict[str, str] = {}
+    try:
+        _redis = sync_redis.Redis.from_url(settings.redis_url, decode_responses=True)
+        for provider in ("openai", "anthropic", "google"):
+            val = _redis.get(f"sg:api_key:{provider}")
+            if val:
+                redis_keys[provider] = val
+        for url_key in ("vllm_url", "ollama_url"):
+            val = _redis.get(f"sg:service_url:{url_key}")
+            if val:
+                redis_urls[url_key] = val
+    except Exception:
+        pass
+
+    # 合并：Redis 优先 > settings（.env）
+    effective_keys = {
+        "openai": redis_keys.get("openai") or settings.openai_api_key,
+        "anthropic": redis_keys.get("anthropic") or settings.anthropic_api_key,
+        "google": redis_keys.get("google") or settings.google_api_key,
+    }
+    effective_urls = {
+        "vllm_url": redis_urls.get("vllm_url") or settings.vllm_url or "",
+        "ollama_url": redis_urls.get("ollama_url") or settings.ollama_url,
+    }
+
     # Mask API keys for display (show last 4 chars)
     def mask_key(key: str | None) -> str:
         if not key:
@@ -260,19 +288,16 @@ async def get_model_config(
     return APIResponse(
         data={
             "routes": routes,
-            "service_urls": {
-                "vllm_url": settings.vllm_url or "",
-                "ollama_url": settings.ollama_url,
-            },
+            "service_urls": effective_urls,
             "api_keys": {
-                "openai": mask_key(settings.openai_api_key),
-                "anthropic": mask_key(settings.anthropic_api_key),
-                "google": mask_key(settings.google_api_key),
+                "openai": mask_key(effective_keys["openai"]),
+                "anthropic": mask_key(effective_keys["anthropic"]),
+                "google": mask_key(effective_keys["google"]),
             },
             "api_keys_set": {
-                "openai": bool(settings.openai_api_key),
-                "anthropic": bool(settings.anthropic_api_key),
-                "google": bool(settings.google_api_key),
+                "openai": bool(effective_keys["openai"]),
+                "anthropic": bool(effective_keys["anthropic"]),
+                "google": bool(effective_keys["google"]),
             },
         },
         meta=Meta(request_id=request_id),
@@ -430,14 +455,25 @@ async def test_model_connection(
         if body.api_key and "****" not in body.api_key:
             api_key = body.api_key
         else:
-            # Use stored keys
+            # Use stored keys: Redis (persistent) > settings (.env)
             api_key = None
+            import redis as sync_redis
+            _stored_keys: dict[str, str] = {}
+            try:
+                _r = sync_redis.Redis.from_url(settings.redis_url, decode_responses=True)
+                for p in ("openai", "anthropic", "google"):
+                    v = _r.get(f"sg:api_key:{p}")
+                    if v:
+                        _stored_keys[p] = v
+            except Exception:
+                pass
+
             if model.startswith("gpt-") or (model.startswith("openai/") and not body.service_url):
-                api_key = settings.openai_api_key
+                api_key = _stored_keys.get("openai") or settings.openai_api_key
             elif model.startswith("claude-"):
-                api_key = settings.anthropic_api_key
+                api_key = _stored_keys.get("anthropic") or settings.anthropic_api_key
             elif model.startswith("gemini/"):
-                api_key = settings.google_api_key
+                api_key = _stored_keys.get("google") or settings.google_api_key
 
         if api_key:
             if model.startswith("gpt-"):
