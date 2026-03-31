@@ -23,6 +23,12 @@ def extract_json(text: str) -> Optional[dict]:
 
     text = text.strip()
 
+    # 0. Strip Qwen3.5 / DeepSeek thinking tags: <think>...</think>
+    think_pattern = re.compile(r'<think>.*?</think>', re.DOTALL)
+    text = think_pattern.sub('', text).strip()
+    if not text:
+        return None
+
     # 1. 尝试直接解析
     try:
         return json.loads(text)

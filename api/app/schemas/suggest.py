@@ -36,6 +36,13 @@ class SuggestionItem(BaseModel):
 # ── Requests ────────────────────────────────────────────────────────────
 
 
+class UserIssueItem(BaseModel):
+    """A single user-curated issue from the HITL checklist."""
+
+    snippet: str = Field(..., description="The flagged text snippet")
+    issue: str = Field(..., description="Issue description (may be user-edited)")
+
+
 class SuggestRequest(BaseModel):
     """Request body for getting writing suggestions."""
 
@@ -55,6 +62,15 @@ class SuggestRequest(BaseModel):
     )
     language: Optional[str] = Field(None, description="ISO 639-1 language code")
     discipline: Optional[str] = Field(None, description="Academic discipline context")
+    user_issues: Optional[list[UserIssueItem]] = Field(
+        None,
+        description="User-curated list of issues to address (from HITL checklist)",
+    )
+    custom_prompt: Optional[str] = Field(
+        None,
+        max_length=1000,
+        description="Additional user instructions for optimization",
+    )
 
 
 class RewriteRequest(BaseModel):
@@ -104,3 +120,53 @@ class RewriteResponse(BaseModel):
     new_risk_score: Optional[float] = Field(
         None, ge=0.0, le=1.0, description="Risk score of the rewritten text"
     )
+
+
+# ── One-click optimize ─────────────────────────────────────────────────
+
+
+class OneClickOptimizeRequest(BaseModel):
+    """Request body for one-click optimization (detect → optimize → store)."""
+
+    text: str = Field(
+        ...,
+        min_length=50,
+        max_length=100_000,
+        description="Original text to optimize",
+    )
+    detection_id: str = Field(
+        ..., description="Detection result ID to attach optimization data to"
+    )
+    user_issues: Optional[list[UserIssueItem]] = Field(
+        None,
+        description="User-curated issues; defaults to detection flagged_segments",
+    )
+    focus: Optional[list[str]] = Field(
+        None, description="Optimization strategy types"
+    )
+    custom_prompt: Optional[str] = Field(
+        None, max_length=1000, description="Additional user instructions"
+    )
+
+
+class OneClickOptimizeResponse(BaseModel):
+    """Response from one-click optimization."""
+
+    optimized_text: str = Field(..., description="Text after applying all suggestions")
+    suggestions: list[SuggestionItem] = Field(
+        default_factory=list, description="Applied suggestions with explanations"
+    )
+    original_risk_score: Optional[float] = Field(None, ge=0.0, le=1.0)
+    estimated_risk_score: Optional[float] = Field(None, ge=0.0, le=1.0)
+    verified_risk_score: Optional[float] = Field(
+        None, ge=0.0, le=1.0,
+        description="Actual risk score from re-detection of optimized text",
+    )
+    verified_nhpr_score: Optional[float] = Field(
+        None, ge=0.0, le=1.0,
+        description="Actual NHPR score from re-detection of optimized text",
+    )
+    optimization_rounds: int = Field(
+        1, description="Number of optimization rounds performed",
+    )
+    timestamp: str = Field(..., description="ISO timestamp of optimization")

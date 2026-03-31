@@ -18,7 +18,7 @@ import json
 @dataclass
 class FormulaParams:
     """公式参数（可配置、可版本化）"""
-    version: str = "v1.2"
+    version: str = "v1.3"
     # RiskScore 权重
     w1: float = 0.70   # LLM评议权重
     w2: float = 0.20   # 统计特征权重
@@ -29,10 +29,10 @@ class FormulaParams:
     a: float = 0.50
     b: float = 0.30
     c: float = 0.20
-    # 风险等级阈值（基于首轮测试调优）
-    threshold_low: float = 0.40     # <0.40 = low（人类文本典型区间0.25-0.40）
-    threshold_medium: float = 0.55  # 0.40-0.55 = medium
-    threshold_high: float = 0.70    # 0.55-0.70 = high, >0.70 = critical
+    # 风险等级阈值（v1.3：上移阈值以减少学术写作误报）
+    threshold_low: float = 0.45     # <0.45 = low（人类文本典型区间0.20-0.40）
+    threshold_medium: float = 0.60  # 0.45-0.60 = medium
+    threshold_high: float = 0.75    # 0.60-0.75 = high, >0.75 = critical
 
     def to_dict(self) -> dict:
         return {
@@ -81,7 +81,7 @@ class FusionResult:
 class EvidenceFusion:
     """证据融合器"""
 
-    FORMULA_VERSION = "v1.0"
+    FORMULA_VERSION = "v1.1"
 
     def __init__(self, params: Optional[FormulaParams] = None):
         self.params = params or FormulaParams()

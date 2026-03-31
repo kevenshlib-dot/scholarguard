@@ -46,7 +46,7 @@ RUN uv sync --frozen --no-dev 2>/dev/null || uv sync --no-dev
 
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
 # ---------------------------------------------------------------------------
 # Stage 3: production — lean runtime image
@@ -72,4 +72,4 @@ USER appuser
 
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]

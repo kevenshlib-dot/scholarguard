@@ -102,6 +102,10 @@ class DetectionResult(Base):
     recommendations: Mapped[Optional[dict]] = mapped_column(
         JSON, nullable=True
     )
+    optimization_data: Mapped[Optional[dict]] = mapped_column(
+        JSON, nullable=True,
+        comment="One-click optimization results: optimized_text, suggestions[], timestamp, estimated_risk_score",
+    )
     uncertainty_notes: Mapped[Optional[str]] = mapped_column(
         Text, nullable=True
     )

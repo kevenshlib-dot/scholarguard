@@ -26,20 +26,32 @@ const STORAGE_KEY = "sg_detect_text";
 
 const disciplines = [
   { value: "general", label: "通用" },
-  { value: "politics", label: "政治学" },
-  { value: "economics", label: "经济学" },
-  { value: "sociology", label: "社会学" },
   { value: "law", label: "法学" },
+  { value: "management", label: "管理学" },
+  { value: "education", label: "教育学" },
+  { value: "economics", label: "经济学" },
+  { value: "history", label: "历史学" },
+  { value: "sociology", label: "社会学" },
+  { value: "lis", label: "图书馆学情报学" },
+  { value: "literary_criticism", label: "文学批评" },
+  { value: "arts", label: "艺术研究" },
+  { value: "politics", label: "政治学" },
 ];
 
 export default function DetectPage() {
   const navigate = useNavigate();
 
-  /* ---- Input State (restore from sessionStorage) ---- */
+  /* ---- Input State (restore from storage) ---- */
   const [text, setText] = useState(() => sessionStorage.getItem(STORAGE_KEY) || "");
-  const [granularity, setGranularity] = useState<Granularity>("paragraph");
-  const [language, setLanguage] = useState<Language>("auto");
-  const [discipline, setDiscipline] = useState("general");
+  const [granularity, setGranularity] = useState<Granularity>(
+    () => (localStorage.getItem("sg_detect_granularity") as Granularity) || "paragraph"
+  );
+  const [language, setLanguage] = useState<Language>(
+    () => (localStorage.getItem("sg_detect_language") as Language) || "auto"
+  );
+  const [discipline, setDiscipline] = useState(
+    () => localStorage.getItem("sg_detect_discipline") || "general"
+  );
   const fileRef = useRef<HTMLInputElement>(null);
 
   /* Persist text to sessionStorage on every change */
@@ -47,12 +59,35 @@ export default function DetectPage() {
     sessionStorage.setItem(STORAGE_KEY, text);
   }, [text]);
 
+  /* Persist detection settings to localStorage */
+  useEffect(() => {
+    localStorage.setItem("sg_detect_granularity", granularity);
+  }, [granularity]);
+  useEffect(() => {
+    localStorage.setItem("sg_detect_language", language);
+  }, [language]);
+  useEffect(() => {
+    localStorage.setItem("sg_detect_discipline", discipline);
+  }, [discipline]);
+
   /* ---- Detection State ---- */
-  const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState("");
-  const [taskStatus, setTaskStatus] = useState<string>("");
-  const [result, setResult] = useState<DetectResultData | null>(null);
+  const [loading, setLoading] = useState(() => !!sessionStorage.getItem("sg_pending_task_id"));
+  const [progress, setProgress] = useState(() =>
+    sessionStorage.getItem("sg_pending_task_id") ? "检测进行中..." : ""
+  );
+  const [taskStatus, setTaskStatus] = useState<string>(() =>
+    sessionStorage.getItem("sg_pending_task_id") ? "processing" : ""
+  );
+  const [result, setResult] = useState<DetectResultData | null>(() => {
+    try {
+      const saved = sessionStorage.getItem("sg_detect_result");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [error, setError] = useState("");
+  const mountedRef = useRef(true);
 
   /* ---- Feedback State ---- */
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -87,7 +122,7 @@ export default function DetectPage() {
             const page = await pdf.getPage(i);
             const content = await page.getTextContent();
             const pageText = content.items
-              .map((item: { str?: string }) => ("str" in item ? item.str : ""))
+              .map((item) => ("str" in item ? (item as { str: string }).str : ""))
               .join("");
             if (pageText.trim()) pages.push(pageText);
           }
@@ -129,6 +164,80 @@ export default function DetectPage() {
     []
   );
 
+  /**
+   * Poll a task and persist result to sessionStorage.
+   * Safe to call whether or not the component is still mounted —
+   * it always writes to sessionStorage, and only touches React state
+   * when the component is still mounted.
+   */
+  const runPolling = useCallback(
+    async (taskId: string) => {
+      try {
+        const final = await pollDetectionResult(
+          taskId,
+          (status) => {
+            if (!mountedRef.current) return;
+            setTaskStatus(status);
+            setProgress(
+              status === "processing"
+                ? "AI模型分析中，请稍候..."
+                : "排队等待中..."
+            );
+          },
+          5000,
+          60
+        );
+
+        // Always persist to sessionStorage (survives navigation)
+        sessionStorage.removeItem("sg_pending_task_id");
+        if (final.status === "failed") {
+          if (mountedRef.current) {
+            setError(final.error || "检测失败，请重试");
+          }
+        } else {
+          sessionStorage.setItem("sg_detect_result", JSON.stringify(final));
+          if (mountedRef.current) {
+            setResult(final);
+          }
+        }
+      } catch (err: unknown) {
+        sessionStorage.removeItem("sg_pending_task_id");
+        if (mountedRef.current) {
+          const msg = err instanceof Error ? err.message : "网络错误";
+          setError(msg);
+        }
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
+          setProgress("");
+          setTaskStatus("");
+        }
+      }
+    },
+    [] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  /* ---- Resume polling on mount if a task is in progress ---- */
+  useEffect(() => {
+    mountedRef.current = true;
+    const pendingTaskId = sessionStorage.getItem("sg_pending_task_id");
+    if (pendingTaskId && pendingTaskId !== "__submitting__") {
+      // Real task ID — resume polling
+      setLoading(true);
+      setProgress("检测进行中...");
+      setTaskStatus("processing");
+      runPolling(pendingTaskId);
+    } else if (pendingTaskId === "__submitting__") {
+      // Task is still being submitted (API call in flight) — show loading
+      setLoading(true);
+      setProgress("正在提交检测任务...");
+      setTaskStatus("submitting");
+    }
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [runPolling]);
+
   /* ---- Detect ---- */
   const handleDetect = async () => {
     if (!text.trim() || text.length < MIN_TEXT_LENGTH) return;
@@ -138,46 +247,42 @@ export default function DetectPage() {
     setFeedbackSent(false);
     setFeedbackOpen(false);
     setProgress("正在提交检测任务...");
+
+    // Clear previous detection result and all downstream data (suggestions, review, etc.)
+    sessionStorage.removeItem("sg_detect_result");
+    sessionStorage.removeItem("sg_optimized_text");
+    sessionStorage.removeItem("sg_original_text");
+    sessionStorage.removeItem("sg_revision_log");
+    sessionStorage.removeItem("sg_revision_timestamp");
     setTaskStatus("submitting");
+
+    // Mark detection as in-progress immediately so navigation won't lose state
+    sessionStorage.setItem("sg_pending_task_id", "__submitting__");
 
     try {
       // Save detection parameters for report page
       sessionStorage.setItem("sg_detect_params", JSON.stringify({ granularity, language, discipline }));
 
       const task = await submitDetection(text, granularity, language, discipline);
-      setTaskStatus("pending");
-      setProgress("任务已提交，排队等待中...");
 
-      const final = await pollDetectionResult(
-        task.task_id,
-        (status) => {
-          setTaskStatus(status);
-          setProgress(
-            status === "processing"
-              ? "AI模型分析中，请稍候..."
-              : "排队等待中..."
-          );
-        },
-        5000,
-        60
-      );
+      // Update with real task ID for polling
+      sessionStorage.setItem("sg_pending_task_id", task.task_id);
 
-      setTaskStatus(final.status);
-
-      if (final.status === "failed") {
-        setError(final.error || "检测失败，请重试");
-      } else {
-        setResult(final);
-        // Save detection result for SuggestPage
-        sessionStorage.setItem("sg_detect_result", JSON.stringify(final));
+      if (mountedRef.current) {
+        setTaskStatus("pending");
+        setProgress("任务已提交，排队等待中...");
       }
+
+      await runPolling(task.task_id);
     } catch (err: unknown) {
+      sessionStorage.removeItem("sg_pending_task_id");
       const msg = err instanceof Error ? err.message : "网络错误";
-      setError(msg);
-    } finally {
-      setLoading(false);
-      setProgress("");
-      setTaskStatus("");
+      if (mountedRef.current) {
+        setError(msg);
+        setLoading(false);
+        setProgress("");
+        setTaskStatus("");
+      }
     }
   };
 
@@ -235,6 +340,17 @@ export default function DetectPage() {
                     sessionStorage.removeItem(STORAGE_KEY);
                     setResult(null);
                     setError("");
+                    // Clear detection result and all downstream data
+                    sessionStorage.removeItem("sg_detect_result");
+                    sessionStorage.removeItem("sg_detect_params");
+                    sessionStorage.removeItem("sg_pending_task_id");
+                    sessionStorage.removeItem("sg_optimized_text");
+                    sessionStorage.removeItem("sg_original_text");
+                    sessionStorage.removeItem("sg_revision_log");
+                    sessionStorage.removeItem("sg_revision_timestamp");
+                    setLoading(false);
+                    setProgress("");
+                    setTaskStatus("");
                   }}
                 >
                   清空文本

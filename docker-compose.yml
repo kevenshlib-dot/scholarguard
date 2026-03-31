@@ -43,17 +43,17 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:6333/healthz || exit 1"]
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333'"]
       interval: 5s
-      timeout: 3s
-      retries: 5
+      timeout: 5s
+      retries: 10
 
   minio:
     image: minio/minio:latest
     restart: unless-stopped
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "9002:9000"
+      - "9003:9001"
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
@@ -94,6 +94,8 @@ services:
       dockerfile: Dockerfile
       target: development
     restart: unless-stopped
+    entrypoint: ["/bin/bash", "/app/entrypoint.sh"]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     ports:
       - "8000:8000"
     env_file:
@@ -103,9 +105,10 @@ services:
       REDIS_URL: redis://redis:6379/0
       MINIO_ENDPOINT: minio:9000
       QDRANT_URL: http://qdrant:6333
+      PATH: /app/.venv/bin:/usr/local/bin:/usr/bin:/bin
     volumes:
       - ./api:/app
-      - /app/.venv          # prevent host .venv from leaking into the container
+      - api_venv:/app/.venv
     depends_on:
       postgres:
         condition: service_healthy
@@ -122,6 +125,7 @@ services:
       dockerfile: Dockerfile
       target: development
     restart: unless-stopped
+    entrypoint: ["/bin/bash", "/app/entrypoint.sh"]
     command: ["celery", "-A", "app.worker", "worker", "--loglevel=info", "--concurrency=2"]
     env_file:
       - .env
@@ -130,9 +134,10 @@ services:
       REDIS_URL: redis://redis:6379/0
       MINIO_ENDPOINT: minio:9000
       QDRANT_URL: http://qdrant:6333
+      PATH: /app/.venv/bin:/usr/local/bin:/usr/bin:/bin
     volumes:
       - ./api:/app
-      - /app/.venv
+      - worker_venv:/app/.venv
     depends_on:
       postgres:
         condition: service_healthy
@@ -145,10 +150,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules   # prevent host node_modules from leaking into the container
+      - "3000:80"
     depends_on:
       - api
 
@@ -160,4 +162,6 @@ volumes:
   redis_data:
   qdrant_data:
   minio_data:
+  api_venv:
+  worker_venv:
   # ollama_models:

@@ -228,8 +228,8 @@ class DetectionEngine:
     async def _run_merged_llm_review(
         self,
         processed: ProcessedText,
-        discipline: str,
-        model_override: Optional[str],
+        discipline: str = "通用",
+        model_override: Optional[str] = None,
     ) -> dict:
         """
         单次合并LLM调用：评议 + 报告
@@ -243,6 +243,7 @@ class DetectionEngine:
 
         prompt = PRIMARY_REVIEW_PROMPT.format(
             text=processed.full_text[:4000],  # 限制输入长度
+            discipline=discipline,
         )
 
         try:
@@ -416,15 +417,15 @@ class DetectionEngine:
         llm_nhpr = llm_evidence.get("nhpr", None)
 
         computed_nhpr = (
-            0.30 * seg_coverage +
+            0.35 * seg_coverage +
             0.25 * flags_intensity +
-            0.25 * stat_score_val +
-            0.20 * min(1.0, non_human_prob)
+            0.10 * stat_score_val +
+            0.30 * min(1.0, non_human_prob)
         )
 
-        # If LLM provided direct NHPR estimate, blend 40% LLM + 60% computed
+        # If LLM provided direct NHPR estimate, blend 55% LLM + 45% computed
         if llm_nhpr is not None and isinstance(llm_nhpr, (int, float)):
-            nhpr = 0.40 * float(llm_nhpr) + 0.60 * computed_nhpr
+            nhpr = 0.55 * float(llm_nhpr) + 0.45 * computed_nhpr
         else:
             nhpr = computed_nhpr
 
@@ -454,9 +455,8 @@ class DetectionEngine:
             + source.get("humanizer_processed", 0.1) * 0.5
         )
 
-        # 取两者的加权平均，并限制在 [0, 1] 范围内
-        raw = 0.6 * ai_prob + 0.4 * (1 - direct_confidence) \
-            if direct_confidence < 0.5 else 0.6 * ai_prob + 0.4 * direct_confidence
+        # 两者加权平均：LLM直接置信度 + source分类推算
+        raw = 0.5 * ai_prob + 0.5 * direct_confidence
         return max(0.0, min(1.0, raw))
 
     # ── 热力图：延迟生成（独立接口调用） ──────────────────────────────

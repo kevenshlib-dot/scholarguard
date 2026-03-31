@@ -151,6 +151,14 @@ export interface LiteratureItem {
   source: string;
 }
 
+export interface OptimizationData {
+  optimized_text: string;
+  original_text: string;
+  suggestions: SuggestionItem[];
+  timestamp: string;
+  estimated_risk_score?: number | null;
+}
+
 export interface ReviewItem {
   id: string;
   detection_id: string;
@@ -159,6 +167,15 @@ export interface ReviewItem {
   risk_score: number;
   status: "pending" | "reviewing" | "resolved";
   text_preview: string;
+  optimization_data?: OptimizationData | null;
+}
+
+export interface OneClickOptimizeResult {
+  optimized_text: string;
+  suggestions: SuggestionItem[];
+  original_risk_score: number | null;
+  estimated_risk_score: number | null;
+  timestamp: string;
 }
 
 /* ---------- Admin Types ---------- */
@@ -319,7 +336,9 @@ export async function getSuggestions(
   strategies: string[],
   detectionId?: string,
   language?: string,
-  discipline?: string
+  discipline?: string,
+  userIssues?: { snippet: string; issue: string }[],
+  customPrompt?: string
 ): Promise<SuggestResultData> {
   const { data } = await client.post<APIResponse<SuggestResultData>>("/suggest", {
     text,
@@ -327,7 +346,27 @@ export async function getSuggestions(
     detection_id: detectionId || undefined,
     language: language || undefined,
     discipline: discipline || undefined,
+    user_issues: userIssues || undefined,
+    custom_prompt: customPrompt || undefined,
   });
+  return data.data;
+}
+
+export async function oneClickOptimize(
+  text: string,
+  detectionId: string,
+  userIssues: { snippet: string; issue: string }[],
+  focus: string[]
+): Promise<OneClickOptimizeResult> {
+  const { data } = await client.post<APIResponse<OneClickOptimizeResult>>(
+    "/suggest/optimize-and-store",
+    {
+      text,
+      detection_id: detectionId,
+      user_issues: userIssues.length > 0 ? userIssues : undefined,
+      focus: focus.length > 0 ? focus : undefined,
+    }
+  );
   return data.data;
 }
 

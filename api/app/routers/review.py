@@ -89,7 +89,8 @@ async def list_reviews(
     by review status: ``pending`` (not yet reviewed), ``reviewing``, or
     ``resolved``.
     """
-    # Build base query: detections with high/critical risk or high review_priority
+    # Build base query: detections with high/critical risk, high review_priority,
+    # or detections that have optimization data attached
     stmt = (
         select(DetectionResult)
         .where(DetectionResult.status == "completed")
@@ -97,6 +98,7 @@ async def list_reviews(
             or_(
                 DetectionResult.risk_level.in_(["high", "critical"]),
                 DetectionResult.review_priority > 0.5,
+                DetectionResult.optimization_data.isnot(None),
             )
         )
         .order_by(desc(DetectionResult.created_at))
@@ -141,14 +143,18 @@ async def list_reviews(
             text_preview = det.document.title if det.document else f"Detection {det.id}"
 
         item_status = "resolved" if has_review else "pending"
+        # Use nhpr_level as primary risk indicator (consistent with DetectPage)
+        display_level = det.nhpr_level or det.risk_level
+        display_score = float(det.nhpr_score) if det.nhpr_score is not None else float(det.risk_score)
         items.append({
             "id": str(det.id),
             "detection_id": str(det.id),
             "submitted_at": det.created_at.isoformat() if det.created_at else "",
-            "risk_level": det.risk_level,
-            "risk_score": float(det.risk_score),
+            "risk_level": display_level,
+            "risk_score": display_score,
             "status": item_status,
             "text_preview": text_preview,
+            "optimization_data": det.optimization_data,
         })
 
     return APIResponse(

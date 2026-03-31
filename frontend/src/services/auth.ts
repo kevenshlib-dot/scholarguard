@@ -17,8 +17,27 @@ export interface AuthResponse {
   user: AuthUser;
 }
 
+const LAST_USER_KEY = "sg_last_user_id";
+
+/** Clear all sg_* session data (detection results, suggestions, review, etc.) */
+function clearSessionData() {
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < sessionStorage.length; i++) {
+    const key = sessionStorage.key(i);
+    if (key?.startsWith("sg_")) keysToRemove.push(key);
+  }
+  keysToRemove.forEach((k) => sessionStorage.removeItem(k));
+}
+
 /** Persist token + user and set axios default header */
 function persist(token: string, user: AuthUser) {
+  // If a different user logs in, clear all session data from previous user
+  const lastUserId = localStorage.getItem(LAST_USER_KEY);
+  if (lastUserId && lastUserId !== user.id) {
+    clearSessionData();
+  }
+  localStorage.setItem(LAST_USER_KEY, user.id);
+
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
   client.defaults.headers.common["Authorization"] = `Bearer ${token}`;
@@ -61,6 +80,7 @@ export async function register(
 
 export function logout() {
   clearAuth();
+  clearSessionData();
 }
 
 export function getToken(): string | null {

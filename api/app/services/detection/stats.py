@@ -162,27 +162,29 @@ class LightweightStatsCalculator:
         """
         scores = []
 
-        # 句长标准差：人类通常 > 15（中文字符），AI通常 < 10
+        # 句长标准差：人类通常 > 15（中文字符），AI通常 < 8
+        # 学术中文正式行文 std 可在 8-12，不应误判
         if language == "zh":
-            sent_score = max(0, min(1, 1.0 - (sent_std - 5) / 20))
+            sent_score = max(0, min(1, 1.0 - (sent_std - 8) / 25))
         else:
-            sent_score = max(0, min(1, 1.0 - (sent_std - 3) / 15))
-        scores.append(('sent_std', sent_score, 0.25))
+            sent_score = max(0, min(1, 1.0 - (sent_std - 5) / 18))
+        scores.append(('sent_std', sent_score, 0.30))
 
         # 重复比例：> 0.5 可能有问题
         rep_score = max(0, min(1, rep_ratio / 0.6))
         scores.append(('rep_ratio', rep_score, 0.15))
 
-        # 连接词密度（每千字）：人类通常 5-15，AI通常 15-30
+        # 连接词密度（每千字）：中文学术写作正常值 12-18/千字，只有远超才可疑
         if language == "zh":
-            conn_score = max(0, min(1, (conn_density - 8) / 20))
+            conn_score = max(0, min(1, (conn_density - 15) / 25))
         else:
-            conn_score = max(0, min(1, (conn_density - 5) / 15))
-        scores.append(('conn_density', conn_score, 0.35))
+            conn_score = max(0, min(1, (conn_density - 8) / 18))
+        scores.append(('conn_density', conn_score, 0.20))
 
-        # 段落均匀性：CV < 0.2 很均匀（像AI），CV > 0.5 变化大（像人类）
-        uniform_score = max(0, min(1, 1.0 - (para_uniform - 0.15) / 0.4))
-        scores.append(('para_uniform', uniform_score, 0.25))
+        # 段落均匀性：CV < 0.08 很均匀（像AI），CV > 0.5 变化大（像人类）
+        # 学术论文结构化写作 CV 常在 0.10-0.20，不应误判
+        uniform_score = max(0, min(1, 1.0 - (para_uniform - 0.08) / 0.5))
+        scores.append(('para_uniform', uniform_score, 0.35))
 
         # 加权平均
         total_weight = sum(w for _, _, w in scores)
