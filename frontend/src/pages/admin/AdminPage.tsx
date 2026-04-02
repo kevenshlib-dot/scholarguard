@@ -179,7 +179,7 @@ function ModelSelector({
 
         {/* Test */}
         <button
-          className={`shrink-0 px-2.5 py-1.5 text-xs rounded-lg border transition-colors whitespace-nowrap ${
+          className={`shrink-0 px-2.5 py-1.5 text-xs rounded-xl border transition-colors whitespace-nowrap ${
             !value
               ? "border-gray-200 text-gray-300 cursor-not-allowed"
               : testStatus?.loading
@@ -495,14 +495,14 @@ export default function AdminPage() {
   return (
     <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">系统管理</h2>
-        <p className="text-sm text-gray-500 mt-1">
+        <h2 className="text-xl font-bold text-gray-900 tracking-tight">系统管理</h2>
+        <p className="text-[13px] text-gray-400 mt-1">
           管理模型配置、检测参数和系统运行状况
         </p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200">
+      <div className="flex gap-1">
         {tabs.map((t) => (
           <button
             key={t.key}
@@ -518,7 +518,7 @@ export default function AdminPage() {
       {activeTab === "model" && (
         <div className="space-y-6">
           {/* Info Banner */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-sm text-blue-800">
             <p className="font-medium mb-1">LLM-Center 架构</p>
             <p>
               每个功能可独立配置主模型、备用模型和降级模型。模型格式示例：
@@ -535,7 +535,7 @@ export default function AdminPage() {
           )}
 
           {modelError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-sm">
               {modelError}
             </div>
           )}
@@ -568,7 +568,7 @@ export default function AdminPage() {
                     const ts = testStatus[tk];
                     return (
                       <div key={key}>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">
+                        <label className="label">
                           {label}
                         </label>
                         <div className="flex gap-2">
@@ -581,7 +581,7 @@ export default function AdminPage() {
                             placeholder={placeholder}
                           />
                           <button
-                            className={`shrink-0 px-2.5 py-1.5 text-xs rounded-lg border transition-colors whitespace-nowrap ${
+                            className={`shrink-0 px-2.5 py-1.5 text-xs rounded-xl border transition-colors whitespace-nowrap ${
                               ts?.loading
                                 ? "border-blue-300 text-blue-500 bg-blue-50 cursor-wait"
                                 : ts?.success === true
@@ -642,7 +642,7 @@ export default function AdminPage() {
                     const ts = testStatus[`key_${provider}`];
                     return (
                     <div key={provider}>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                      <label className="label">
                         {label} API Key
                         {modelCfg.api_keys_set?.[provider] && (
                           <span className="ml-1.5 text-green-600">
@@ -661,7 +661,7 @@ export default function AdminPage() {
                           placeholder={placeholder}
                         />
                         <button
-                          className={`shrink-0 px-2.5 py-1.5 text-xs rounded-lg border transition-colors whitespace-nowrap ${
+                          className={`shrink-0 px-2.5 py-1.5 text-xs rounded-xl border transition-colors whitespace-nowrap ${
                             ts?.loading
                               ? "border-blue-300 text-blue-500 bg-blue-50 cursor-wait"
                               : ts?.success === true
@@ -740,7 +740,7 @@ export default function AdminPage() {
                   return (
                     <div
                       key={taskType}
-                      className="border border-gray-200 rounded-lg p-4 space-y-3"
+                      className="border border-gray-200 rounded-2xl p-4 space-y-3"
                     >
                       <div className="flex items-center gap-2">
                         <span className="text-lg">{tm.icon}</span>
@@ -756,7 +756,7 @@ export default function AdminPage() {
                       <div className="grid grid-cols-3 gap-4">
                         {/* Primary */}
                         <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                          <label className="label.5">
                             <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" />
                             主模型
                           </label>
@@ -777,7 +777,7 @@ export default function AdminPage() {
                         </div>
                         {/* Fallback */}
                         <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                          <label className="label.5">
                             <span className="inline-block w-2 h-2 rounded-full bg-yellow-400 mr-1" />
                             备用模型
                           </label>
@@ -798,7 +798,7 @@ export default function AdminPage() {
                         </div>
                         {/* Degradation */}
                         <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                          <label className="label.5">
                             <span className="inline-block w-2 h-2 rounded-full bg-gray-300 mr-1" />
                             降级模型
                           </label>
@@ -862,7 +862,7 @@ export default function AdminPage() {
           )}
 
           {formulaError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-sm">
               {formulaError}
             </div>
           )}
@@ -871,7 +871,7 @@ export default function AdminPage() {
             <div className="grid grid-cols-4 gap-4">
               {formulaParams.map((p, i) => (
                 <div key={p.key}>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                  <label className="label">
                     {p.label || p.key}
                   </label>
                   <input
@@ -919,7 +919,7 @@ export default function AdminPage() {
           )}
 
           {usageError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-sm">
               {usageError}
             </div>
           )}
@@ -996,7 +996,7 @@ export default function AdminPage() {
           )}
 
           {auditError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm mb-4">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-sm mb-4">
               {auditError}
             </div>
           )}
@@ -1005,16 +1005,16 @@ export default function AdminPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 text-left">
-                  <th className="pb-2 text-xs font-medium text-gray-500">
+                  <th className="pb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
                     时间
                   </th>
-                  <th className="pb-2 text-xs font-medium text-gray-500">
+                  <th className="pb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
                     操作
                   </th>
-                  <th className="pb-2 text-xs font-medium text-gray-500">
+                  <th className="pb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
                     用户
                   </th>
-                  <th className="pb-2 text-xs font-medium text-gray-500">
+                  <th className="pb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
                     详情
                   </th>
                 </tr>
@@ -1026,7 +1026,7 @@ export default function AdminPage() {
                       {log.timestamp}
                     </td>
                     <td className="py-2.5">
-                      <span className="inline-block px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">
+                      <span className="badge-gray">
                         {log.action}
                       </span>
                     </td>
@@ -1050,7 +1050,7 @@ export default function AdminPage() {
 
           {/* Pagination */}
           {auditTotal > 20 && (
-            <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
+            <div className="flex items-center justify-between mt-4 pt-4 divider">
               <p className="text-xs text-gray-500">
                 共 {auditTotal} 条记录
               </p>
@@ -1085,7 +1085,7 @@ export default function AdminPage() {
           )}
 
           {usersError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm mb-4">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-sm mb-4">
               {usersError}
             </div>
           )}
@@ -1094,22 +1094,22 @@ export default function AdminPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 text-left">
-                  <th className="pb-2 text-xs font-medium text-gray-500">
+                  <th className="pb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
                     用户名
                   </th>
-                  <th className="pb-2 text-xs font-medium text-gray-500">
+                  <th className="pb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
                     邮箱
                   </th>
-                  <th className="pb-2 text-xs font-medium text-gray-500">
+                  <th className="pb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
                     角色
                   </th>
-                  <th className="pb-2 text-xs font-medium text-gray-500">
+                  <th className="pb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
                     状态
                   </th>
-                  <th className="pb-2 text-xs font-medium text-gray-500">
+                  <th className="pb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
                     注册时间
                   </th>
-                  <th className="pb-2 text-xs font-medium text-gray-500">
+                  <th className="pb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
                     操作
                   </th>
                 </tr>
@@ -1136,11 +1136,7 @@ export default function AdminPage() {
                     </td>
                     <td className="py-2.5">
                       <span
-                        className={`inline-block px-2 py-0.5 text-xs rounded-full ${
-                          u.is_active
-                            ? "bg-green-100 text-green-700"
-                            : "bg-red-100 text-red-700"
-                        }`}
+                        className={u.is_active ? "badge-green" : "badge-red"}
                       >
                         {u.is_active ? "活跃" : "已禁用"}
                       </span>
@@ -1151,7 +1147,7 @@ export default function AdminPage() {
                     <td className="py-2.5">
                       <div className="flex items-center gap-2">
                         <select
-                          className="text-xs border border-gray-200 rounded px-2 py-1 bg-white"
+                          className="select text-xs"
                           value={u.role}
                           onChange={(e) =>
                             handleRoleChange(u.id, e.target.value)
@@ -1162,7 +1158,7 @@ export default function AdminPage() {
                           <option value="admin">admin</option>
                         </select>
                         <button
-                          className={`text-xs px-2 py-1 rounded ${
+                          className={`text-xs px-2 py-1 rounded-xl ${
                             u.is_active
                               ? "bg-red-50 text-red-600 hover:bg-red-100"
                               : "bg-green-50 text-green-600 hover:bg-green-100"

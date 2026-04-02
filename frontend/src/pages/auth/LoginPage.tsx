@@ -42,32 +42,43 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-brand-50/30 to-slate-100 px-4">
+      {/* Decorative blobs */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-brand-200/20 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-brand-300/15 rounded-full blur-3xl" />
+      </div>
+
+      <div className="w-full max-w-[420px] relative">
         {/* Branding */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-brand-600 text-white font-bold text-2xl mb-4">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-600 to-brand-400 text-white font-bold text-2xl mb-5 shadow-xl shadow-brand-500/30">
             S
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">ScholarGuard</h1>
-          <p className="text-sm text-gray-500 mt-1">学术AI检测平台</p>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+            ScholarGuard
+          </h1>
+          <p className="text-sm text-gray-400 mt-1">学术 AI 检测平台</p>
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">登录</h2>
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl shadow-gray-200/50 border border-white/60 p-8">
+          <h2 className="text-lg font-bold text-gray-900 mb-6">
+            欢迎回来
+          </h2>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm mb-4">
+            <div className="bg-red-50 border border-red-100 text-red-600 px-4 py-3 rounded-xl text-sm mb-5 flex items-center gap-2">
+              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+              </svg>
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                邮箱
-              </label>
+              <label className="label">邮箱</label>
               <input
                 type="email"
                 className="input"
@@ -80,9 +91,7 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                密码
-              </label>
+              <label className="label">密码</label>
               <input
                 type="password"
                 className="input"
@@ -96,29 +105,14 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              className="btn-primary w-full justify-center"
+              className="btn-primary w-full justify-center py-3"
               disabled={loading || !canSubmit}
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
-                  <svg
-                    className="animate-spin h-4 w-4 text-white"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      fill="none"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                    />
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
                   登录中...
                 </span>
@@ -128,11 +122,11 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="text-center text-sm text-gray-500 mt-6">
+          <p className="text-center text-sm text-gray-400 mt-6">
             还没有账号？
             <Link
               to="/register"
-              className="text-brand-600 hover:text-brand-700 font-medium ml-1"
+              className="text-brand-600 hover:text-brand-700 font-semibold ml-1"
             >
               立即注册
             </Link>

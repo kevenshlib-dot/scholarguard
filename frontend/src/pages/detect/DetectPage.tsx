@@ -339,9 +339,9 @@ export default function DetectPage() {
     <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">AI 文本检测</h2>
-        <p className="text-sm text-gray-500 mt-1">
-          基于证据的学术文本AI生成检测，支持多粒度、多学科分析
+        <h2 className="text-xl font-bold text-gray-900 tracking-tight">AI 文本检测</h2>
+        <p className="text-[13px] text-gray-400 mt-1">
+          基于证据的学术文本 AI 生成检测，支持多粒度、多学科分析
         </p>
       </div>
 
@@ -349,11 +349,9 @@ export default function DetectPage() {
       <div className="card space-y-4">
         {/* Text area */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            待检测文本
-          </label>
+          <label className="label">待检测文本</label>
           <textarea
-            className="input min-h-[200px] resize-y"
+            className="input min-h-[200px] resize-y !rounded-2xl"
             placeholder="在此粘贴需要检测的学术文本，或上传 PDF / Word / TXT 文件...（至少200字符）"
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -371,7 +369,7 @@ export default function DetectPage() {
               {text.length > 0 && (
                 <button
                   type="button"
-                  className="text-xs text-red-500 hover:text-red-600 font-medium"
+                  className="text-xs text-red-400 hover:text-red-600 font-semibold transition-colors"
                   onClick={() => {
                     setText("");
                     sessionStorage.removeItem(STORAGE_KEY);
@@ -396,11 +394,12 @@ export default function DetectPage() {
               )}
               <button
                 type="button"
-                className="text-xs text-brand-600 hover:text-brand-700 font-medium"
+                className="text-xs text-brand-500 hover:text-brand-700 font-semibold transition-colors flex items-center gap-1"
                 disabled={fileLoading || ocrLoading}
                 onClick={() => fileRef.current?.click()}
               >
-                {ocrLoading ? "OCR 识别中..." : fileLoading ? "解析文件中..." : "上传文件 (.txt / .docx / .pdf)"}
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
+                {ocrLoading ? "OCR 识别中..." : fileLoading ? "解析文件中..." : "上传文件"}
               </button>
               <input
                 ref={fileRef}
@@ -415,50 +414,35 @@ export default function DetectPage() {
 
         {/* OCR loading indicator */}
         {ocrLoading && (
-          <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
-            <svg
-              className="animate-spin h-5 w-5 text-blue-500"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-                fill="none"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-              />
+          <div className="flex items-center gap-3 bg-brand-50 border border-brand-100 rounded-2xl px-5 py-4">
+            <svg className="animate-spin h-5 w-5 text-brand-500 shrink-0" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
             <div>
-              <p className="text-sm font-medium text-blue-900">OCR 识别中...</p>
-              <p className="text-xs text-blue-600">正在使用视觉模型识别 PDF 中的文字，请耐心等待</p>
+              <p className="text-sm font-semibold text-brand-800">OCR 识别中...</p>
+              <p className="text-xs text-brand-500">正在使用视觉模型识别 PDF 中的文字，请耐心等待</p>
             </div>
           </div>
         )}
 
         {/* OCR accuracy info */}
         {ocrAccuracy && (
-          <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
-            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-              <span className="text-sm font-bold text-green-700">
+          <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-100 rounded-2xl px-5 py-4">
+            <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center">
+              <span className="text-sm font-bold text-emerald-700">
                 {Math.round(ocrAccuracy.estimate * 100)}
               </span>
             </div>
             <div>
-              <p className="text-sm font-medium text-green-900">
+              <p className="text-sm font-semibold text-emerald-800">
                 OCR 识别完成 — 预估准确率 {(ocrAccuracy.estimate * 100).toFixed(0)}%
               </p>
-              <p className="text-xs text-green-600">{ocrAccuracy.note}</p>
+              <p className="text-xs text-emerald-500">{ocrAccuracy.note}</p>
             </div>
             <button
               type="button"
-              className="ml-auto text-xs text-green-500 hover:text-green-700"
+              className="ml-auto text-xs text-emerald-400 hover:text-emerald-600 font-semibold transition-colors"
               onClick={() => setOcrAccuracy(null)}
             >
               关闭
@@ -470,7 +454,7 @@ export default function DetectPage() {
         <div className="grid grid-cols-3 gap-4">
           {/* Granularity */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">
+            <label className="label">
               检测粒度
             </label>
             <select
@@ -486,7 +470,7 @@ export default function DetectPage() {
 
           {/* Language */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">
+            <label className="label">
               语言
             </label>
             <select
@@ -502,7 +486,7 @@ export default function DetectPage() {
 
           {/* Discipline */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">
+            <label className="label">
               学科领域
             </label>
             <select
@@ -600,7 +584,8 @@ export default function DetectPage() {
 
       {/* Error */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+        <div className="bg-red-50 border border-red-100 text-red-600 px-5 py-3.5 rounded-2xl text-sm flex items-center gap-2.5">
+          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
           {error}
         </div>
       )}
@@ -608,22 +593,22 @@ export default function DetectPage() {
       {/* Results */}
       {result && (
         <div className="card space-y-6">
-          <h3 className="text-lg font-semibold text-gray-900">检测结果</h3>
+          <h3 className="text-lg font-bold text-gray-900 tracking-tight">检测结果</h3>
 
           {/* PRIMARY INDICATOR: NHPR */}
-          <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-6">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
-              <h4 className="text-sm font-semibold text-indigo-900">主要检测指标</h4>
+          <div className="bg-gradient-to-br from-brand-50 via-purple-50/50 to-brand-50 border border-brand-100 rounded-2xl p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-1.5 h-1.5 rounded-full bg-brand-500"></div>
+              <h4 className="text-xs font-bold text-brand-600 uppercase tracking-wider">主要检测指标</h4>
             </div>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-3xl font-extrabold text-gray-900">
+                <p className="text-4xl font-extrabold text-gray-900 tracking-tight">
                   {result.nhpr_score !== undefined ? (result.nhpr_score * 100).toFixed(1) : "N/A"}
-                  <span className="text-lg font-normal text-gray-400">%</span>
+                  <span className="text-lg font-normal text-gray-300 ml-0.5">%</span>
                 </p>
-                <p className="text-sm font-medium text-indigo-700 mt-1">AI特征占比 (NHPR)</p>
-                <p className="text-xs text-gray-500 mt-1">文本中检测到具有AI生成特征的片段比例</p>
+                <p className="text-sm font-semibold text-brand-700 mt-1.5">AI 特征占比 (NHPR)</p>
+                <p className="text-xs text-gray-400 mt-1">文本中检测到具有 AI 生成特征的片段比例</p>
               </div>
               <div className="text-right">
                 <RiskBadge level={result.nhpr_level ?? result.risk_level ?? "low"} size="lg" />
@@ -632,37 +617,37 @@ export default function DetectPage() {
           </div>
 
           {/* SECONDARY REFERENCE: AI Similarity & other metrics */}
-          <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-2 h-2 rounded-full bg-gray-400"></div>
-              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">辅助参考指标</h4>
-              <span className="text-xs text-gray-400 ml-auto">仅供参考</span>
+          <div className="bg-gray-50/80 rounded-2xl p-5 border border-gray-100">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-1.5 h-1.5 rounded-full bg-gray-300"></div>
+              <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">辅助参考指标</h4>
+              <span className="badge-gray text-[10px] ml-auto">仅供参考</span>
             </div>
             <div className="grid grid-cols-3 gap-4">
-              <div className="text-center">
-                <p className="text-xl font-bold text-gray-700">
+              <div className="text-center bg-white rounded-xl p-3 border border-gray-100">
+                <p className="text-xl font-bold text-gray-700 tracking-tight">
                   {result.risk_score !== undefined ? (result.risk_score * 100).toFixed(1) : "N/A"}
-                  <span className="text-xs font-normal text-gray-400">%</span>
+                  <span className="text-[10px] font-medium text-gray-300 ml-0.5">%</span>
                 </p>
-                <p className="text-xs text-gray-500 mt-1">AI相似度（参考）</p>
+                <p className="text-[11px] text-gray-400 mt-1 font-medium">AI 相似度</p>
               </div>
-              <div className="text-center">
-                <p className="text-xl font-bold text-gray-700">
+              <div className="text-center bg-white rounded-xl p-3 border border-gray-100">
+                <p className="text-xl font-bold text-gray-700 tracking-tight">
                   {result.llm_confidence !== undefined ? (result.llm_confidence * 100).toFixed(1) : "N/A"}
-                  <span className="text-xs font-normal text-gray-400">%</span>
+                  <span className="text-[10px] font-medium text-gray-300 ml-0.5">%</span>
                 </p>
-                <p className="text-xs text-gray-500 mt-1">LLM 置信度</p>
+                <p className="text-[11px] text-gray-400 mt-1 font-medium">LLM 置信度</p>
               </div>
-              <div className="text-center">
-                <p className="text-xl font-bold text-gray-700">
+              <div className="text-center bg-white rounded-xl p-3 border border-gray-100">
+                <p className="text-xl font-bold text-gray-700 tracking-tight">
                   {result.statistical_score !== undefined ? (result.statistical_score * 100).toFixed(1) : "N/A"}
-                  <span className="text-xs font-normal text-gray-400">%</span>
+                  <span className="text-[10px] font-medium text-gray-300 ml-0.5">%</span>
                 </p>
-                <p className="text-xs text-gray-500 mt-1">统计特征分数</p>
+                <p className="text-[11px] text-gray-400 mt-1 font-medium">统计特征</p>
               </div>
             </div>
-            <p className="text-xs text-gray-400 mt-3 leading-relaxed">
-              AI相似度为辅助参考指标，基于大语言模型概率估计，存在固有不确定性，不可作为单一判定依据。
+            <p className="text-[11px] text-gray-400 mt-4 leading-relaxed">
+              AI 相似度为辅助参考指标，基于大语言模型概率估计，存在固有不确定性，不可作为单一判定依据。
             </p>
           </div>
 
@@ -727,8 +712,8 @@ export default function DetectPage() {
 
           {/* Uncertainty disclaimer */}
           {result.uncertainty_note && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
-              <span className="font-semibold">不确定性声明：</span>
+            <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-xs text-amber-700">
+              <span className="font-bold">不确定性声明：</span>
               {result.uncertainty_note}
             </div>
           )}
@@ -758,8 +743,8 @@ export default function DetectPage() {
 
           {/* Feedback form */}
           {feedbackOpen && (
-            <div className="border border-gray-200 rounded-lg p-4 space-y-3">
-              <p className="text-sm font-medium text-gray-700">检测结果反馈</p>
+            <div className="border border-gray-100 rounded-2xl p-5 space-y-4 bg-gray-50/50">
+              <p className="text-sm font-bold text-gray-700">检测结果反馈</p>
               <div className="flex gap-3">
                 {(
                   [

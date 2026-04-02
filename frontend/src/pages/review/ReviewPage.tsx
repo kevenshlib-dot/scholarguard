@@ -222,8 +222,8 @@ export default function ReviewPage() {
   return (
     <div className={`${showOriginal ? "max-w-7xl" : "max-w-5xl"} mx-auto px-6 py-8 space-y-6 transition-all`}>
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">复核中心</h2>
-        <p className="text-sm text-gray-500 mt-1">
+        <h2 className="text-xl font-bold text-gray-900 tracking-tight">复核中心</h2>
+        <p className="text-[13px] text-gray-400 mt-1">
           审阅优化结果、管理检测复核与用户反馈
         </p>
       </div>
@@ -248,14 +248,14 @@ export default function ReviewPage() {
 
       {/* Error */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+        <div className="bg-red-50 border border-red-100 text-red-600 px-5 py-3.5 rounded-2xl text-sm">
           {error}
         </div>
       )}
 
       {/* Success */}
       {submitSuccess && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+        <div className="bg-green-50 border border-green-100 text-green-700 px-5 py-3.5 rounded-2xl text-sm">
           复核决定已提交
         </div>
       )}
@@ -273,7 +273,7 @@ export default function ReviewPage() {
                       ✓
                     </span>
                     <div>
-                      <p className="text-sm font-semibold text-gray-900">
+                      <p className="text-sm font-bold text-gray-700">
                         优化已完成
                       </p>
                       <p className="text-xs text-gray-500">
@@ -304,7 +304,7 @@ export default function ReviewPage() {
               <div className="card space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <h3 className="text-lg font-semibold text-gray-900">
+                    <h3 className="text-sm font-bold text-gray-700">
                       优化后文本
                     </h3>
                     {!showOriginal && (
@@ -332,7 +332,7 @@ export default function ReviewPage() {
                     {showOriginal && (
                       <p className="text-xs font-medium text-green-600 mb-1.5">优化后文本</p>
                     )}
-                    <div className="text-sm text-gray-800 leading-relaxed bg-gray-50 rounded-lg p-4 whitespace-pre-wrap max-h-[400px] overflow-y-auto">
+                    <div className="text-sm text-gray-800 leading-relaxed bg-gray-50 rounded-2xl p-4 whitespace-pre-wrap max-h-[400px] overflow-y-auto">
                       {optimizedText}
                     </div>
                   </div>
@@ -351,7 +351,7 @@ export default function ReviewPage() {
                           ✕ 关闭
                         </button>
                       </div>
-                      <div className="text-sm text-gray-600 leading-relaxed bg-gray-50 rounded-lg p-4 whitespace-pre-wrap max-h-[400px] overflow-y-auto border border-gray-200">
+                      <div className="text-sm text-gray-600 leading-relaxed bg-gray-50 rounded-2xl p-4 whitespace-pre-wrap max-h-[400px] overflow-y-auto border border-gray-200">
                         {originalText}
                       </div>
                     </div>
@@ -361,7 +361,7 @@ export default function ReviewPage() {
 
               {/* Revision log */}
               <div className="card space-y-3">
-                <h3 className="text-lg font-semibold text-gray-900">
+                <h3 className="text-sm font-bold text-gray-700">
                   修订说明
                   <span className="text-sm font-normal text-gray-400 ml-2">
                     {revisionLog.length} 条修改
@@ -371,7 +371,7 @@ export default function ReviewPage() {
                   {revisionLog.map((sug, idx) => (
                     <div
                       key={sug.suggestion_id}
-                      className="border border-gray-200 rounded-lg overflow-hidden"
+                      className="border border-gray-200 rounded-2xl overflow-hidden"
                     >
                       {/* Header */}
                       <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border-b border-gray-100">
@@ -442,7 +442,7 @@ export default function ReviewPage() {
             {reviews.map((item) => (
               <button
                 key={item.id}
-                className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                className={`w-full text-left p-3 rounded-2xl border transition-colors ${
                   selectedId === item.id
                     ? "border-brand-500 bg-brand-50"
                     : "border-gray-200 hover:border-gray-300"
@@ -484,22 +484,22 @@ export default function ReviewPage() {
             {selected ? (
               <div className="card space-y-4">
                 <div className="flex items-center justify-between">
-                  <h4 className="font-semibold text-gray-900">复核详情</h4>
+                  <h4 className="text-sm font-bold text-gray-700">复核详情</h4>
                   <RiskBadge
                     level={selected.risk_level}
                     score={selected.risk_score}
                   />
                 </div>
-                <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 rounded-lg p-4">
+                <p className="text-sm text-gray-600 leading-relaxed bg-gray-50 rounded-2xl p-4">
                   {selected.text_preview}
                 </p>
 
                 {/* Optimization results (if available) */}
                 {selected.optimization_data && (
-                  <div className="border border-green-200 bg-green-50/30 rounded-lg p-4 space-y-3">
+                  <div className="border border-green-200 bg-green-50/30 rounded-2xl p-4 space-y-3">
                     <div className="flex items-center gap-2">
                       <span className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center text-green-600 text-xs font-bold">✓</span>
-                      <h5 className="text-sm font-semibold text-gray-900">优化结果</h5>
+                      <h5 className="text-sm font-bold text-gray-700">优化结果</h5>
                       <span className="text-xs text-gray-400">
                         {selected.optimization_data.suggestions.length} 条修改
                       </span>
@@ -507,8 +507,8 @@ export default function ReviewPage() {
 
                     {/* Optimized text preview */}
                     <div>
-                      <span className="text-xs text-gray-500 font-medium">优化后文本</span>
-                      <p className="text-sm text-gray-700 bg-white border border-green-100 rounded-lg p-3 mt-1 max-h-[160px] overflow-y-auto whitespace-pre-wrap leading-relaxed">
+                      <span className="label">优化后文本</span>
+                      <p className="text-sm text-gray-700 bg-white border border-green-100 rounded-2xl p-3 mt-1 max-h-[160px] overflow-y-auto whitespace-pre-wrap leading-relaxed">
                         {selected.optimization_data.optimized_text.slice(0, 500)}
                         {selected.optimization_data.optimized_text.length > 500 && "..."}
                       </p>
@@ -516,7 +516,7 @@ export default function ReviewPage() {
 
                     {/* Revision log */}
                     <div>
-                      <span className="text-xs text-gray-500 font-medium">修改明细</span>
+                      <span className="label">修改明细</span>
                       <div className="space-y-2 mt-1 max-h-[300px] overflow-y-auto">
                         {selected.optimization_data.suggestions.map((sug, idx) => (
                           <div key={sug.suggestion_id || idx} className="bg-white border border-gray-100 rounded p-3">
@@ -556,7 +556,7 @@ export default function ReviewPage() {
                 )}
 
                 <div className="border-t border-gray-100 pt-4 space-y-3">
-                  <p className="text-sm font-medium text-gray-700">复核决定</p>
+                  <p className="text-sm font-bold text-gray-700">复核决定</p>
                   <div className="flex gap-3">
                     {(
                       [
@@ -616,7 +616,7 @@ export default function ReviewPage() {
       {/* ============ Stats Tab ============ */}
       {activeTab === "stats" && (
         <div className="card space-y-4">
-          <h4 className="font-semibold text-gray-900">反馈统计概览</h4>
+          <h4 className="text-sm font-bold text-gray-700">反馈统计概览</h4>
           <div className="grid grid-cols-4 gap-4">
             {[
               { label: "总反馈数", value: "128" },
@@ -626,7 +626,7 @@ export default function ReviewPage() {
             ].map((stat) => (
               <div
                 key={stat.label}
-                className="bg-gray-50 rounded-lg p-4 text-center"
+                className="bg-gray-50 rounded-2xl p-4 text-center"
               >
                 <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
                 <p className="text-xs text-gray-500 mt-1">{stat.label}</p>

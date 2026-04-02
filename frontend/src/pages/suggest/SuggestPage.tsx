@@ -50,13 +50,13 @@ function autoSelectStrategies(detectResult: DetectResultData): string[] {
 function riskLevelLabel(level: string): { text: string; className: string } {
   switch (level) {
     case "critical":
-      return { text: "极高风险", className: "bg-red-200 text-red-800" };
+      return { text: "极高风险", className: "badge-red" };
     case "high":
-      return { text: "高风险", className: "bg-red-100 text-red-700" };
+      return { text: "高风险", className: "badge-red" };
     case "medium":
-      return { text: "中风险", className: "bg-amber-100 text-amber-700" };
+      return { text: "中风险", className: "badge-yellow" };
     case "low":
-      return { text: "低风险", className: "bg-green-100 text-green-700" };
+      return { text: "低风险", className: "badge-green" };
     default:
       return { text: level, className: "bg-gray-100 text-gray-700" };
   }
@@ -593,8 +593,8 @@ export default function SuggestPage() {
     <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">写作建议</h2>
-        <p className="text-sm text-gray-500 mt-1">
+        <h2 className="text-xl font-bold text-gray-900 tracking-tight">写作建议</h2>
+        <p className="text-[13px] text-gray-400 mt-1">
           获取改善文本自然度和学术质量的建议，自动导入最近一次检测的文本与结果
         </p>
       </div>
@@ -604,7 +604,7 @@ export default function SuggestPage() {
         {/* Text area with import button */}
         <div>
           <div className="flex items-center justify-between mb-1.5">
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="label">
               输入文本
             </label>
             <button
@@ -643,7 +643,7 @@ export default function SuggestPage() {
 
         {/* Detection context banner */}
         {detectResult && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
             <div className="flex items-center gap-3 flex-wrap">
               <span className="text-sm font-medium text-blue-800">
                 已导入检测结果
@@ -676,15 +676,15 @@ export default function SuggestPage() {
 
         {/* HITL Issues Checklist Panel */}
         {editableIssues.length > 0 && (
-          <div className="border border-orange-200 rounded-lg overflow-hidden">
+          <div className="border border-orange-200 rounded-2xl overflow-hidden">
             <button
               type="button"
               className="w-full flex items-center justify-between px-4 py-3 bg-orange-50 hover:bg-orange-100 transition-colors"
               onClick={() => setIssuesPanelOpen((v) => !v)}
             >
               <div className="flex items-center gap-2">
-                <span className="text-lg">📋</span>
-                <span className="text-sm font-semibold text-orange-800">
+                <svg className="w-4 h-4 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                <span className="text-sm font-bold text-gray-700">
                   检测问题清单
                 </span>
                 <span className="text-xs text-orange-600">
@@ -751,7 +751,7 @@ export default function SuggestPage() {
                               value={item.issue}
                               onChange={(e) => updateIssueText(item.id, e.target.value)}
                               disabled={!item.checked}
-                              className={`flex-1 text-xs border rounded px-2 py-1 transition-colors ${
+                              className={`flex-1 text-xs border rounded-xl px-2 py-1 transition-colors ${
                                 item.checked
                                   ? "border-orange-200 bg-white text-gray-800 focus:border-orange-400 focus:ring-1 focus:ring-orange-200"
                                   : "border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed"
@@ -777,11 +777,11 @@ export default function SuggestPage() {
 
                 {/* Custom prompt input */}
                 <div className="px-4 py-3 border-t border-orange-100 bg-orange-50/30">
-                  <label className="block text-xs font-medium text-orange-800 mb-1.5">
+                  <label className="label">
                     补充提示（可选）
                   </label>
                   <textarea
-                    className="w-full text-xs border border-orange-200 rounded-lg px-3 py-2 bg-white placeholder-gray-400 focus:border-orange-400 focus:ring-1 focus:ring-orange-200 resize-y"
+                    className="input text-xs resize-y"
                     rows={2}
                     placeholder="在此输入额外的优化要求，例如：&quot;保持原文的学术正式性&quot;、&quot;重点改善第二段的论证逻辑&quot;、&quot;不要改变专业术语&quot;..."
                     value={customPrompt}
@@ -795,11 +795,11 @@ export default function SuggestPage() {
 
         {/* Overall detection summary (when no segments but has scores) */}
         {issuesSummary && editableIssues.length === 0 && (
-          <div className="border border-blue-200 rounded-lg overflow-hidden">
+          <div className="border border-blue-200 rounded-2xl overflow-hidden">
             <div className="px-4 py-3 bg-blue-50">
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-lg">📊</span>
-                <span className="text-sm font-semibold text-blue-800">检测评估概览</span>
+                <svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                <span className="text-sm font-bold text-gray-700">检测评估概览</span>
               </div>
               <div className="space-y-1">
                 {issuesSummary.map((item, idx) => (
@@ -817,14 +817,14 @@ export default function SuggestPage() {
 
         {/* Strategy checkboxes */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="label">
             优化策略
           </label>
           <div className="grid grid-cols-2 gap-3">
             {strategies.map((s) => (
               <label
                 key={s.value}
-                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
                   selected.includes(s.value)
                     ? "border-brand-500 bg-brand-50"
                     : "border-gray-200 hover:border-gray-300"
@@ -915,7 +915,8 @@ export default function SuggestPage() {
 
       {/* Error */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+        <div className="bg-red-50 border border-red-100 text-red-600 px-5 py-3.5 rounded-2xl text-sm flex items-center gap-2.5">
+          <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           {error}
         </div>
       )}
@@ -925,9 +926,9 @@ export default function SuggestPage() {
         <div className="card space-y-4">
           {/* Summary */}
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900">
+            <h3 className="text-sm font-bold text-gray-700 mb-2">
               优化建议
-              <span className="text-sm font-normal text-gray-400 ml-2">
+              <span className="text-xs font-normal text-gray-400 ml-2">
                 共 {results.length} 条
               </span>
             </h3>
@@ -974,7 +975,7 @@ export default function SuggestPage() {
               return (
                 <div
                   key={sug.suggestion_id}
-                  className={`border rounded-lg overflow-hidden transition-colors ${
+                  className={`border rounded-2xl overflow-hidden transition-colors ${
                     isAccepted
                       ? "border-green-300 bg-green-50/30"
                       : "border-gray-200"
@@ -999,7 +1000,7 @@ export default function SuggestPage() {
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        className={`px-3 py-1 text-xs rounded font-medium transition-colors ${
+                        className={`px-3 py-1 text-xs rounded-xl font-medium transition-colors ${
                           isAccepted
                             ? "bg-green-500 text-white"
                             : "bg-white border border-green-300 text-green-600 hover:bg-green-50"
@@ -1010,7 +1011,7 @@ export default function SuggestPage() {
                       </button>
                       <button
                         type="button"
-                        className={`px-3 py-1 text-xs rounded font-medium transition-colors ${
+                        className={`px-3 py-1 text-xs rounded-xl font-medium transition-colors ${
                           !isAccepted && accepted[sug.suggestion_id] !== undefined
                             ? "bg-white border border-gray-300 text-gray-500"
                             : "bg-white border border-red-300 text-red-500 hover:bg-red-50"
@@ -1025,14 +1026,14 @@ export default function SuggestPage() {
                   {/* Card body */}
                   <div className="p-4 space-y-2">
                     <div>
-                      <span className="text-xs text-gray-400">原文</span>
-                      <p className="text-sm text-gray-600 bg-red-50 rounded px-3 py-2 mt-1 line-through">
+                      <span className="label">原文</span>
+                      <p className="text-sm text-gray-600 bg-red-50 rounded-xl px-3 py-2 mt-1 line-through">
                         {sug.original_text}
                       </p>
                     </div>
                     <div>
-                      <span className="text-xs text-gray-400">建议修改</span>
-                      <p className="text-sm text-gray-900 bg-green-50 rounded px-3 py-2 mt-1">
+                      <span className="label">建议修改</span>
+                      <p className="text-sm text-gray-900 bg-green-50 rounded-xl px-3 py-2 mt-1">
                         {sug.suggested_text}
                       </p>
                     </div>
@@ -1073,12 +1074,12 @@ export default function SuggestPage() {
       {/* Preview section */}
       {previewHtml && results.length > 0 && (
         <div className="card space-y-3">
-          <h3 className="text-lg font-semibold text-gray-900">预览效果</h3>
+          <h3 className="text-sm font-bold text-gray-700 mb-2">预览效果</h3>
           <p className="text-xs text-gray-500">
             绿色高亮部分为接受的建议修改
           </p>
           <div
-            className="text-sm text-gray-800 leading-relaxed bg-gray-50 rounded-lg p-4 whitespace-pre-wrap"
+            className="text-sm text-gray-800 leading-relaxed bg-gray-50 rounded-2xl p-4 whitespace-pre-wrap"
             dangerouslySetInnerHTML={{ __html: previewHtml }}
           />
         </div>
