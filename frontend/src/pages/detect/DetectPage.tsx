@@ -6,17 +6,16 @@ import {
   submitDetection,
   pollDetectionResult,
   submitFeedback,
+  checkOcrAvailability,
+  performOcr,
 } from "../../services/api";
 import type { DetectResultData } from "../../services/api";
 import RiskBadge from "../../components/RiskBadge";
 import HeatmapBar from "../../components/HeatmapBar";
 import HighlightedText from "../../components/HighlightedText";
 
-// PDF.js worker — use bundled worker from pdfjs-dist
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url
-).toString();
+// PDF.js worker — use static file from public/ directory
+pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
 type Granularity = "document" | "paragraph" | "sentence";
 type Language = "auto" | "zh" | "en";
@@ -99,8 +98,10 @@ export default function DetectPage() {
 
   const textTooShort = text.length > 0 && text.length < MIN_TEXT_LENGTH;
 
-  /* ---- PDF parsing state ---- */
+  /* ---- PDF parsing / OCR state ---- */
   const [fileLoading, setFileLoading] = useState(false);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrAccuracy, setOcrAccuracy] = useState<{ estimate: number; note: string } | null>(null);
 
   /* ---- File upload handler ---- */
   const handleFile = useCallback(
@@ -114,7 +115,7 @@ export default function DetectPage() {
 
       try {
         if (ext === "pdf") {
-          // PDF: 使用 pdf.js 提取纯文本
+          // PDF: 先用 pdf.js 提取纯文本
           const arrayBuffer = await file.arrayBuffer();
           const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
           const pages: string[] = [];
@@ -128,11 +129,47 @@ export default function DetectPage() {
           }
           const fullText = pages.join("\n\n");
           if (!fullText.trim()) {
-            setError(
-              "PDF 文件未能提取到文本内容。如果是扫描件/图片型 PDF，请先 OCR 后再上传。"
-            );
+            // pdf.js 无法提取文本 → 尝试 OCR
+            setFileLoading(false);
+            setOcrAccuracy(null);
+            try {
+              // 先检查 OCR 是否可用
+              const ocrCheck = await checkOcrAvailability();
+              if (!ocrCheck.available) {
+                setError(
+                  "PDF 文件未能提取到文本内容。如果是扫描件/图片型 PDF，请先 OCR 后再上传。"
+                );
+                e.target.value = "";
+                return;
+              }
+              // 开始 OCR
+              setOcrLoading(true);
+              const ocrResult = await performOcr(file);
+              setOcrLoading(false);
+              if (ocrResult.text && ocrResult.text.trim()) {
+                setText(ocrResult.text);
+                setOcrAccuracy({
+                  estimate: ocrResult.accuracy_estimate,
+                  note: ocrResult.accuracy_note,
+                });
+              } else {
+                setError("OCR 识别完成，但未能从 PDF 中提取到文字内容。");
+              }
+            } catch (ocrErr) {
+              setOcrLoading(false);
+              const ocrMsg = ocrErr instanceof Error ? ocrErr.message : "OCR 处理失败";
+              // 503 = OCR not configured
+              if (ocrMsg.includes("503") || ocrMsg.includes("OCR模型未配置")) {
+                setError(
+                  "PDF 文件未能提取到文本内容。如果是扫描件/图片型 PDF，请先 OCR 后再上传。"
+                );
+              } else {
+                setError(`OCR 处理失败：${ocrMsg}`);
+              }
+            }
           } else {
             setText(fullText);
+            setOcrAccuracy(null);
           }
         } else if (ext === "docx") {
           // .docx 是 ZIP 压缩的 XML，需要用 mammoth 解析
@@ -340,6 +377,7 @@ export default function DetectPage() {
                     sessionStorage.removeItem(STORAGE_KEY);
                     setResult(null);
                     setError("");
+                    setOcrAccuracy(null);
                     // Clear detection result and all downstream data
                     sessionStorage.removeItem("sg_detect_result");
                     sessionStorage.removeItem("sg_detect_params");
@@ -359,10 +397,10 @@ export default function DetectPage() {
               <button
                 type="button"
                 className="text-xs text-brand-600 hover:text-brand-700 font-medium"
-                disabled={fileLoading}
+                disabled={fileLoading || ocrLoading}
                 onClick={() => fileRef.current?.click()}
               >
-                {fileLoading ? "解析文件中..." : "上传文件 (.txt / .docx / .pdf)"}
+                {ocrLoading ? "OCR 识别中..." : fileLoading ? "解析文件中..." : "上传文件 (.txt / .docx / .pdf)"}
               </button>
               <input
                 ref={fileRef}
@@ -374,6 +412,59 @@ export default function DetectPage() {
             </div>
           </div>
         </div>
+
+        {/* OCR loading indicator */}
+        {ocrLoading && (
+          <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+            <svg
+              className="animate-spin h-5 w-5 text-blue-500"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+                fill="none"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+              />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-blue-900">OCR 识别中...</p>
+              <p className="text-xs text-blue-600">正在使用视觉模型识别 PDF 中的文字，请耐心等待</p>
+            </div>
+          </div>
+        )}
+
+        {/* OCR accuracy info */}
+        {ocrAccuracy && (
+          <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+              <span className="text-sm font-bold text-green-700">
+                {Math.round(ocrAccuracy.estimate * 100)}
+              </span>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-green-900">
+                OCR 识别完成 — 预估准确率 {(ocrAccuracy.estimate * 100).toFixed(0)}%
+              </p>
+              <p className="text-xs text-green-600">{ocrAccuracy.note}</p>
+            </div>
+            <button
+              type="button"
+              className="ml-auto text-xs text-green-500 hover:text-green-700"
+              onClick={() => setOcrAccuracy(null)}
+            >
+              关闭
+            </button>
+          </div>
+        )}
 
         {/* Options row */}
         <div className="grid grid-cols-3 gap-4">
@@ -432,7 +523,7 @@ export default function DetectPage() {
         <div className="flex items-center gap-3 pt-2">
           <button
             className="btn-primary"
-            disabled={loading || !text.trim() || text.length < MIN_TEXT_LENGTH}
+            disabled={loading || ocrLoading || !text.trim() || text.length < MIN_TEXT_LENGTH}
             onClick={handleDetect}
           >
             {loading ? (

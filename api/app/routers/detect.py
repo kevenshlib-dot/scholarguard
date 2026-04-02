@@ -9,11 +9,12 @@ with a task_id that clients can poll.
 from __future__ import annotations
 
 import hashlib
+import logging
 import time
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,7 +36,171 @@ from app.schemas.detect import (
     TaskStatus,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/detect", tags=["Detection"])
+
+
+# ── OCR endpoints (must be before /{task_id} to avoid path conflict) ────
+
+
+def _load_runtime_config_from_redis(redis_url: str) -> tuple[dict, dict]:
+    """Load API keys and service URLs from Redis (written by admin panel)."""
+    import redis as sync_redis
+
+    keys: dict = {}
+    urls: dict = {}
+    try:
+        r = sync_redis.Redis.from_url(redis_url, decode_responses=True)
+        for provider in ("openai", "anthropic", "google"):
+            val = r.get(f"sg:api_key:{provider}")
+            if val:
+                keys[provider] = val
+        for url_key in ("vllm_url", "ollama_url"):
+            val = r.get(f"sg:service_url:{url_key}")
+            if val:
+                urls[url_key] = val
+    except Exception as e:
+        logger.warning("OCR: failed to load Redis config: %s", e)
+    return keys, urls
+
+
+async def _load_model_routes(session: AsyncSession) -> dict | None:
+    """Load model routes from admin panel DB config."""
+    try:
+        from app.models.system import ModelConfig
+        from app.services.llm_gateway.client import DEFAULT_MODEL_ROUTES
+
+        stmt = select(ModelConfig).where(ModelConfig.is_active == True)  # noqa: E712
+        result = await session.execute(stmt)
+        db_configs = {cfg.task_type: cfg for cfg in result.scalars().all()}
+
+        if not db_configs:
+            return None
+
+        routes = dict(DEFAULT_MODEL_ROUTES)
+        for task_type, cfg in db_configs.items():
+            default = DEFAULT_MODEL_ROUTES.get(task_type, {})
+            routes[task_type] = {
+                "primary": cfg.primary_model,
+                "fallback": cfg.fallback_model or default.get("fallback"),
+                "degradation": cfg.degradation_strategy or default.get("degradation"),
+            }
+        return routes
+    except Exception as e:
+        logger.warning("OCR: failed to load DB model routes: %s", e)
+        return None
+
+
+@router.get(
+    "/ocr/check",
+    response_model=APIResponse,
+    summary="Check if OCR model is configured",
+)
+async def check_ocr_availability(
+    user: UserContext = Depends(get_current_active_user),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_async_session),
+) -> APIResponse:
+    """Check whether an OCR model is configured and available."""
+    from app.services.llm_gateway.client import LLMClient
+
+    model_routes = await _load_model_routes(session)
+    runtime_keys, runtime_urls = _load_runtime_config_from_redis(settings.redis_url)
+
+    llm_client = LLMClient(
+        ollama_url=runtime_urls.get("ollama_url", "http://localhost:11434"),
+        vllm_url=runtime_urls.get("vllm_url", settings.vllm_url or "http://192.168.31.18:8001/v1"),
+        model_routes=model_routes,
+        openai_api_key=runtime_keys.get("openai") or settings.openai_api_key,
+        anthropic_api_key=runtime_keys.get("anthropic") or settings.anthropic_api_key,
+        google_api_key=runtime_keys.get("google") or settings.google_api_key,
+    )
+
+    from app.services.ocr import check_ocr_available
+
+    available = await check_ocr_available(llm_client)
+    return APIResponse(
+        data={"available": available},
+        meta=Meta(request_id="ocr-check"),
+    )
+
+
+@router.post(
+    "/ocr",
+    response_model=APIResponse,
+    dependencies=[Depends(rate_limit(max_tokens=3, refill_rate=0.05, key_prefix="rl:ocr"))],
+    summary="Perform OCR on an uploaded PDF file",
+)
+async def perform_ocr(
+    file: UploadFile = File(...),
+    user: UserContext = Depends(get_current_active_user),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_async_session),
+) -> APIResponse:
+    """Upload a PDF and perform OCR to extract text using a vision-capable model.
+
+    Returns the extracted text along with an accuracy estimate.
+    If no OCR model is configured, returns a 503 error.
+    """
+    from app.services.llm_gateway.client import LLMClient
+    from app.services.ocr import check_ocr_available, ocr_pdf
+
+    # Validate file type
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="仅支持PDF文件",
+        )
+
+    # Read file content
+    pdf_bytes = await file.read()
+    if len(pdf_bytes) > 50 * 1024 * 1024:  # 50MB limit
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="文件大小不能超过50MB",
+        )
+
+    # Build LLM client with DB/Redis config
+    model_routes = await _load_model_routes(session)
+    runtime_keys, runtime_urls = _load_runtime_config_from_redis(settings.redis_url)
+
+    llm_client = LLMClient(
+        ollama_url=runtime_urls.get("ollama_url", "http://localhost:11434"),
+        vllm_url=runtime_urls.get("vllm_url", settings.vllm_url or "http://192.168.31.18:8001/v1"),
+        model_routes=model_routes,
+        openai_api_key=runtime_keys.get("openai") or settings.openai_api_key,
+        anthropic_api_key=runtime_keys.get("anthropic") or settings.anthropic_api_key,
+        google_api_key=runtime_keys.get("google") or settings.google_api_key,
+    )
+
+    # Check OCR availability
+    if not await check_ocr_available(llm_client):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="OCR模型未配置，无法进行图像识别。请联系管理员在系统管理中配置OCR模型。",
+        )
+
+    start = time.perf_counter()
+
+    try:
+        result = await ocr_pdf(pdf_bytes, llm_client)
+    except Exception as e:
+        logger.error(f"OCR处理失败: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"OCR处理失败：{str(e)}",
+        )
+
+    elapsed = (time.perf_counter() - start) * 1000
+
+    return APIResponse(
+        data=result,
+        meta=Meta(
+            request_id=f"ocr-{uuid.uuid4().hex[:8]}",
+            processing_time_ms=round(elapsed, 2),
+        ),
+    )
 
 
 @router.post(

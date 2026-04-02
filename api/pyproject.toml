@@ -24,6 +24,7 @@ dependencies = [
     "redis>=7.4.0",
     "sqlalchemy>=2.0.48",
     "uvicorn[standard]>=0.42.0",
+    "pymupdf>=1.25.0",
 ]
 
 [dependency-groups]

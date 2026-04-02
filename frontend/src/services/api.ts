@@ -178,6 +178,20 @@ export interface OneClickOptimizeResult {
   timestamp: string;
 }
 
+/* ---------- OCR Types ---------- */
+
+export interface OcrCheckResult {
+  available: boolean;
+}
+
+export interface OcrResult {
+  text: string;
+  page_count: number;
+  processed_pages: number;
+  accuracy_estimate: number;
+  accuracy_note: string;
+}
+
 /* ---------- Admin Types ---------- */
 
 export interface FormulaParam {
@@ -365,6 +379,36 @@ export async function oneClickOptimize(
       detection_id: detectionId,
       user_issues: userIssues.length > 0 ? userIssues : undefined,
       focus: focus.length > 0 ? focus : undefined,
+    }
+  );
+  return data.data;
+}
+
+/* ---------- OCR API ---------- */
+
+/**
+ * Check if OCR model is configured on the backend.
+ */
+export async function checkOcrAvailability(): Promise<OcrCheckResult> {
+  const { data } = await client.get<APIResponse<OcrCheckResult>>(
+    "/detect/ocr/check"
+  );
+  return data.data;
+}
+
+/**
+ * Upload a PDF file for OCR processing.
+ * Uses multipart/form-data upload.
+ */
+export async function performOcr(file: File): Promise<OcrResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await client.post<APIResponse<OcrResult>>(
+    "/detect/ocr",
+    formData,
+    {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 300_000, // 5 minutes for OCR processing
     }
   );
   return data.data;

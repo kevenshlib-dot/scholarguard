@@ -36,6 +36,11 @@ DEFAULT_MODEL_ROUTES = {
         "fallback": "gpt-4o",
         "degradation": None,
     },
+    "ocr": {
+        "primary": "gemini/gemini-2.5-pro",
+        "fallback": "gpt-4o",
+        "degradation": None,
+    },
 }
 
 
@@ -228,6 +233,137 @@ class LLMClient:
 
         raise RuntimeError(
             f"所有模型调用均失败 (task={task_type}): {last_error}"
+        )
+
+    async def chat_with_image(
+        self,
+        task_type: str,
+        system_prompt: str,
+        user_prompt: str,
+        image_base64: str,
+        mime_type: str = "image/png",
+        model_override: Optional[str] = None,
+        max_tokens: int = 4096,
+        temperature: float = 0.3,
+    ) -> str:
+        """
+        带图片的LLM对话接口（用于OCR等视觉任务）
+
+        Args:
+            task_type: 任务类型（用于路由选择）
+            system_prompt: 系统提示词
+            user_prompt: 用户提示词
+            image_base64: Base64编码的图片数据
+            mime_type: 图片MIME类型
+            model_override: 指定模型（跳过路由）
+            max_tokens: 最大输出token数
+            temperature: 温度参数
+
+        Returns:
+            模型响应文本
+        """
+        route = self.model_routes.get(task_type, {})
+        models_to_try = []
+
+        if model_override:
+            models_to_try = [model_override]
+        else:
+            for key in ["primary", "fallback", "degradation"]:
+                model = route.get(key)
+                if model:
+                    models_to_try.append(model)
+
+        if not models_to_try:
+            raise RuntimeError(f"没有为任务类型 '{task_type}' 配置可用模型")
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user_prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{mime_type};base64,{image_base64}",
+                        },
+                    },
+                ],
+            },
+        ]
+
+        last_error = None
+        for model in models_to_try:
+            try:
+                start_time = time.time()
+
+                kwargs = {
+                    "model": model,
+                    "messages": messages,
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                }
+
+                # 模型路由：按类型设置 api_base 和 api_key
+                if model.startswith("gemini/"):
+                    if self._api_keys.get("google"):
+                        kwargs["api_key"] = self._api_keys["google"]
+                    kwargs["max_tokens"] = max(max_tokens, 8192)
+                elif model.startswith("claude-"):
+                    if self._api_keys.get("anthropic"):
+                        kwargs["api_key"] = self._api_keys["anthropic"]
+                elif model.startswith("gpt-") or model.startswith("o1") or model.startswith("o3") or model.startswith("o4"):
+                    if self._api_keys.get("openai"):
+                        kwargs["api_key"] = self._api_keys["openai"]
+
+                response = await litellm.acompletion(**kwargs)
+
+                elapsed_ms = int((time.time() - start_time) * 1000)
+                msg = response.choices[0].message
+                content = msg.content
+
+                if not content or content.strip() == "":
+                    reasoning = getattr(msg, "reasoning_content", None)
+                    if reasoning:
+                        content = reasoning
+                    if not content and hasattr(msg, "provider_specific_fields"):
+                        psf = msg.provider_specific_fields or {}
+                        content = psf.get("reasoning_content") or psf.get("reasoning") or ""
+                    if not content and hasattr(msg, "model_extra"):
+                        extra = msg.model_extra or {}
+                        content = extra.get("reasoning_content") or extra.get("thinking") or ""
+
+                if not content:
+                    logger.warning(f"视觉模型 {model} 返回空内容，跳过。")
+                    continue
+
+                usage = response.usage
+                self._log_usage(
+                    task_type=task_type,
+                    model=model,
+                    input_tokens=usage.prompt_tokens if usage else 0,
+                    output_tokens=usage.completion_tokens if usage else 0,
+                    elapsed_ms=elapsed_ms,
+                )
+                self._last_used_model[task_type] = model
+
+                logger.info(
+                    f"视觉LLM调用成功: model={model}, task={task_type}, "
+                    f"tokens={usage.total_tokens if usage else '?'}, "
+                    f"耗时={elapsed_ms}ms"
+                )
+
+                return content
+
+            except Exception as e:
+                last_error = e
+                logger.warning(
+                    f"视觉LLM调用失败 model={model}: {type(e).__name__}: {e}"
+                )
+                continue
+
+        raise RuntimeError(
+            f"所有视觉模型调用均失败 (task={task_type}): {last_error}"
         )
 
     def _log_usage(self, task_type: str, model: str,
